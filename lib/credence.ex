@@ -28,6 +28,7 @@ defmodule Credence do
     Credence.Rule.NoSortThenAt,
     Credence.Rule.NoSortThenReverse,
     Credence.Rule.NoStringLengthForCharCheck,
+    Credence.Rule.NoUnnecessaryCatchAllRaise,
     Credence.Rule.RedundantListGuard,
     Credence.Rule.UnnecessaryGraphemeChunking
   ]
