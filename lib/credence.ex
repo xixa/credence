@@ -19,7 +19,8 @@ defmodule Credence do
     Credence.Rule.NoRedundantEnumJoinSeparator,
     Credence.Rule.NoSortThenAt,
     Credence.Rule.NoSortThenReverse,
-    Credence.Rule.NoStringLengthForCharCheck
+    Credence.Rule.NoStringLengthForCharCheck,
+    Credence.Rule.UnnecessaryGraphemeChunking
   ]
 
   @doc """

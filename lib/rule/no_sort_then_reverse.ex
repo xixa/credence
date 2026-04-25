@@ -85,8 +85,7 @@ defmodule Credence.Rule.NoSortThenReverse do
       {_ast, issues} =
         Macro.prewalk(ast, [], fn
           # Enum.reverse(sorted_var)
-          {{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, meta,
-           [{var_name, _, nil}]} = node,
+          {{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, meta, [{var_name, _, nil}]} = node,
           acc
           when is_atom(var_name) ->
             if MapSet.member?(sort_vars, var_name) do

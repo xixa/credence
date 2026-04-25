@@ -92,7 +92,8 @@ defmodule Credence.Rule.NoGraphemePalindromeCheck do
 
   defp decomposition_call?(node) do
     match?(
-      {{:., _, [{:__aliases__, _, [:String]}, func]}, _, _} when func in [:graphemes, :to_charlist],
+      {{:., _, [{:__aliases__, _, [:String]}, func]}, _, _}
+      when func in [:graphemes, :to_charlist],
       node
     )
   end

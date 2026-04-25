@@ -37,8 +37,7 @@ defmodule Credence.Rule.NoMultipleEnumAt do
     # Collect all Enum.at(var, literal_index) calls
     {_ast, calls} =
       Macro.prewalk(ast, [], fn
-        {{:., _, [{:__aliases__, _, [:Enum]}, :at]}, meta, [{var_name, _, nil}, idx]} = node,
-        acc
+        {{:., _, [{:__aliases__, _, [:Enum]}, :at]}, meta, [{var_name, _, nil}, idx]} = node, acc
         when is_atom(var_name) ->
           if literal_index?(idx) do
             {node, [{var_name, Keyword.get(meta, :line)} | acc]}
