@@ -51,7 +51,9 @@ defmodule Credence.Rule.RedundantListGuard do
     redundant_vars = find_redundant_is_list(guard, cons_tail_vars)
 
     case redundant_vars do
-      [] -> :error
+      [] ->
+        :error
+
       vars ->
         issues =
           Enum.map(vars, fn var ->

@@ -83,9 +83,7 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
 
   # --- AST helpers ---
 
-  defp extract_enum_call(
-         {{:., _, [{:__aliases__, _, [:Enum]}, func]}, meta, [arg | _]}
-       )
+  defp extract_enum_call({{:., _, [{:__aliases__, _, [:Enum]}, func]}, meta, [arg | _]})
        when func in @enum_funcs do
     case var_name(arg) do
       nil -> :error

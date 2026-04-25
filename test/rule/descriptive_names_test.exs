@@ -13,6 +13,7 @@ defmodule Credence.Rule.DescriptiveNamesTest do
         def calculate(price, tax_rate), do: price * tax_rate
       end
       """
+
       assert check(code) == []
     end
 
@@ -22,6 +23,7 @@ defmodule Credence.Rule.DescriptiveNamesTest do
         def compute(x, y), do: x + y
       end
       """
+
       issues = check(code)
       assert length(issues) == 2
       assert Enum.any?(issues, fn i -> i.message =~ "parameter `x`" end)
@@ -34,6 +36,7 @@ defmodule Credence.Rule.DescriptiveNamesTest do
         defp helper(a), do: a
       end
       """
+
       issues = check(code)
       assert length(issues) == 1
       assert hd(issues).rule == :descriptive_names
@@ -46,6 +49,7 @@ defmodule Credence.Rule.DescriptiveNamesTest do
         def skip_two(_, _), do: :ok
       end
       """
+
       assert check(code) == []
     end
 
@@ -57,6 +61,7 @@ defmodule Credence.Rule.DescriptiveNamesTest do
         end
       end
       """
+
       issues = check(code)
       # Should find a, b, h, t
       assert length(issues) == 4

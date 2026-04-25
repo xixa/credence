@@ -16,6 +16,7 @@ defmodule Credence do
     Credence.Rule.NoGuardEqualityForPatternMatch,
     Credence.Rule.NoLengthInGuard,
     Credence.Rule.NoListAppendInLoop,
+    Credence.Rule.NoListFold,
     Credence.Rule.NoListLast,
     Credence.Rule.NoManualStringReverse,
     Credence.Rule.NoMultipleEnumAt,
