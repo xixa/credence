@@ -19,6 +19,7 @@ defmodule Credence do
     Credence.Rule.NoListFold,
     Credence.Rule.NoListLast,
     Credence.Rule.NoManualStringReverse,
+    Credence.Rule.NoMapKeysEnumLookup,
     Credence.Rule.NoMultipleEnumAt,
     Credence.Rule.NoNestedEnumOnSameEnumerable,
     Credence.Rule.NoParamRebinding,
