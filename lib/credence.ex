@@ -8,12 +8,14 @@ defmodule Credence do
   # The default profile of rules to run
   @default_rules [
     Credence.Rule.NoGraphemePalindromeCheck,
+    Credence.Rule.NoGuardEqualityForPatternMatch,
     Credence.Rule.NoLengthInGuard,
     Credence.Rule.NoListAppendInLoop,
     Credence.Rule.NoListLast,
     Credence.Rule.NoManualStringReverse,
     Credence.Rule.NoMultipleEnumAt,
     Credence.Rule.NoParamRebinding,
+    Credence.Rule.NoRedundantEnumJoinSeparator,
     Credence.Rule.NoSortThenAt,
     Credence.Rule.NoSortThenReverse,
     Credence.Rule.NoStringLengthForCharCheck
