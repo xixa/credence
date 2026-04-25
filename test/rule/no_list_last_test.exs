@@ -2,7 +2,12 @@ defmodule Credence.Rule.NoListLastTest do
   use ExUnit.Case
   alias Credence.Issue
 
-  describe "analyze/2 - NoListLast Rule" do
+  defp check(code) do
+    {:ok, ast} = Code.string_to_quoted(code)
+    Credence.Rule.NoListLast.check(ast, [])
+  end
+
+  describe "NoListLast" do
     test "passes code that avoids List.last" do
       code = """
       defmodule GoodCode do
@@ -14,10 +19,7 @@ defmodule Credence.Rule.NoListLastTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "detects List.last/1" do
@@ -30,12 +32,10 @@ defmodule Credence.Rule.NoListLastTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
+      assert length(issues) == 1
+      issue = hd(issues)
       assert %Issue{} = issue
       assert issue.rule == :no_list_last
       assert issue.severity == :warning
@@ -53,10 +53,9 @@ defmodule Credence.Rule.NoListLastTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 2
+      assert length(issues) == 2
     end
 
     test "ignores List.first (handled by different rule)" do
@@ -68,11 +67,7 @@ defmodule Credence.Rule.NoListLastTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      # NoListLast specifically targets List.last, not List.first
-      list_last_issues = Enum.filter(result.issues, &(&1.rule == :no_list_last))
-      assert list_last_issues == []
+      assert check(code) == []
     end
   end
 end

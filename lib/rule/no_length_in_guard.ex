@@ -38,13 +38,10 @@ defmodule Credence.Rule.NoLengthInGuard do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Match: def name(args) when <guard> do ... end
-        # The AST for a guarded def is:
-        #   {:def, meta, [{:when, _, [call, guard]}, body]}
-        {:def, meta, [{:when, _, [_call, guard]}, _body]} = node, issues ->
+        {:def, meta, [{:when, _, [_call, guard]} | _rest]} = node, issues ->
           {node, find_length_in_guard(guard, meta, issues)}
 
-        {:defp, meta, [{:when, _, [_call, guard]}, _body]} = node, issues ->
+        {:defp, meta, [{:when, _, [_call, guard]} | _rest]} = node, issues ->
           {node, find_length_in_guard(guard, meta, issues)}
 
         node, issues ->

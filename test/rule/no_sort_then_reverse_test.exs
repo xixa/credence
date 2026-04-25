@@ -2,7 +2,12 @@ defmodule Credence.Rule.NoSortThenReverseTest do
   use ExUnit.Case
   alias Credence.Issue
 
-  describe "analyze/2 - NoSortThenReverse Rule" do
+  defp check(code) do
+    {:ok, ast} = Code.string_to_quoted(code)
+    Credence.Rule.NoSortThenReverse.check(ast, [])
+  end
+
+  describe "NoSortThenReverse" do
     test "passes code that uses Enum.sort with :desc" do
       code = """
       defmodule GoodSort do
@@ -12,10 +17,7 @@ defmodule Credence.Rule.NoSortThenReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "detects Enum.sort |> Enum.reverse pipeline" do
@@ -27,12 +29,10 @@ defmodule Credence.Rule.NoSortThenReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
+      assert length(issues) == 1
+      issue = hd(issues)
       assert %Issue{} = issue
       assert issue.rule == :no_sort_then_reverse
       assert issue.severity == :warning
@@ -49,13 +49,10 @@ defmodule Credence.Rule.NoSortThenReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
-      assert issue.rule == :no_sort_then_reverse
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_sort_then_reverse
     end
 
     test "detects variable-mediated sort then reverse" do
@@ -70,13 +67,10 @@ defmodule Credence.Rule.NoSortThenReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
-      assert issue.rule == :no_sort_then_reverse
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_sort_then_reverse
     end
 
     test "ignores Enum.reverse used on a non-sorted variable" do
@@ -88,28 +82,21 @@ defmodule Credence.Rule.NoSortThenReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
-    test "ignores Enum.sort with a custom comparator followed by reverse" do
-      # This is still flaggable, but we only flag Enum.sort/1 (no comparator)
-      # since the user may have intentional reasons for sort+reverse with a comparator.
+    test "detects Enum.sort with a custom comparator followed by reverse" do
       code = """
-      defmodule SafeCustom do
+      defmodule CustomSort do
         def process(list) do
           Enum.sort(list, &(&1.name <= &2.name)) |> Enum.reverse()
         end
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      # This depends on whether we want to flag sort/2 + reverse too.
-      # For now, the rule matches Enum.sort with any arity piped to reverse.
-      assert length(result.issues) == 1
+      assert length(issues) == 1
     end
   end
 end

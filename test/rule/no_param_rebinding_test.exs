@@ -1,7 +1,12 @@
 defmodule Credence.Rule.NoParamRebindingTest do
   use ExUnit.Case
 
-  describe "analyze/2 - NoParamRebinding Rule" do
+  defp check(code) do
+    {:ok, ast} = Code.string_to_quoted(code)
+    Credence.Rule.NoParamRebinding.check(ast, [])
+  end
+
+  describe "NoParamRebinding" do
     test "passes code with no parameter rebinding" do
       code = """
       defmodule GoodReduce do
@@ -15,10 +20,7 @@ defmodule Credence.Rule.NoParamRebindingTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      rebind_issues = Enum.filter(result.issues, &(&1.rule == :no_param_rebinding))
-      assert rebind_issues == []
+      assert check(code) == []
     end
 
     test "detects simple variable rebinding in fn body" do
@@ -34,12 +36,11 @@ defmodule Credence.Rule.NoParamRebindingTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      rebind_issues = Enum.filter(result.issues, &(&1.rule == :no_param_rebinding))
-      assert length(rebind_issues) == 2
+      assert length(issues) == 2
 
-      messages = Enum.map(rebind_issues, & &1.message)
+      messages = Enum.map(issues, & &1.message)
       assert Enum.any?(messages, &(&1 =~ "q"))
       assert Enum.any?(messages, &(&1 =~ "count"))
     end
@@ -56,12 +57,10 @@ defmodule Credence.Rule.NoParamRebindingTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      rebind_issues = Enum.filter(result.issues, &(&1.rule == :no_param_rebinding))
-      assert length(rebind_issues) >= 1
-
-      issue = hd(rebind_issues)
+      assert length(issues) >= 1
+      issue = hd(issues)
       assert issue.message =~ "q"
       assert issue.severity == :info
       assert issue.meta.line != nil
@@ -80,12 +79,7 @@ defmodule Credence.Rule.NoParamRebindingTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      # `temp` is not a parameter, it's a local — rebinding it is still
-      # arguably smelly but not what this rule targets
-      rebind_issues = Enum.filter(result.issues, &(&1.rule == :no_param_rebinding))
-      assert rebind_issues == []
+      assert check(code) == []
     end
 
     test "ignores underscore-prefixed parameters" do
@@ -99,10 +93,7 @@ defmodule Credence.Rule.NoParamRebindingTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      rebind_issues = Enum.filter(result.issues, &(&1.rule == :no_param_rebinding))
-      assert rebind_issues == []
+      assert check(code) == []
     end
   end
 end

@@ -33,8 +33,7 @@ defmodule Credence.Rule.NoStringLengthForCharCheck do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Match: String.length(x) == 1, String.length(x) != 1,
-        #        String.length(x) === 1, String.length(x) !== 1
+        # Match: String.length(x) == 1, String.length(x) != 1, etc.
         {op, meta,
          [
            {{:., _, [{:__aliases__, _, [:String]}, :length]}, _, [_arg]},

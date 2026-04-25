@@ -2,7 +2,12 @@ defmodule Credence.Rule.NoManualStringReverseTest do
   use ExUnit.Case
   alias Credence.Issue
 
-  describe "analyze/2 - NoManualStringReverse Rule" do
+  defp check(code) do
+    {:ok, ast} = Code.string_to_quoted(code)
+    Credence.Rule.NoManualStringReverse.check(ast, [])
+  end
+
+  describe "NoManualStringReverse" do
     test "passes code that uses String.reverse/1" do
       code = """
       defmodule GoodPalindrome do
@@ -13,10 +18,7 @@ defmodule Credence.Rule.NoManualStringReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "detects String.graphemes |> Enum.reverse |> Enum.join pipeline" do
@@ -30,12 +32,10 @@ defmodule Credence.Rule.NoManualStringReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
+      assert length(issues) == 1
+      issue = hd(issues)
       assert %Issue{} = issue
       assert issue.rule == :no_manual_string_reverse
       assert issue.severity == :warning
@@ -52,13 +52,10 @@ defmodule Credence.Rule.NoManualStringReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
-      assert issue.rule == :no_manual_string_reverse
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_manual_string_reverse
     end
 
     test "ignores Enum.reverse used on non-grapheme lists" do
@@ -70,10 +67,7 @@ defmodule Credence.Rule.NoManualStringReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "ignores String.graphemes used without reverse+join" do
@@ -85,10 +79,7 @@ defmodule Credence.Rule.NoManualStringReverseTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
   end
 end

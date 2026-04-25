@@ -25,14 +25,13 @@ defmodule Credence.Rule.NoSortThenAt do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Pipeline form: Enum.sort(...) |> Enum.at(...)
-        {:|>, meta,
-         [
-           {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, _},
-           {{:., _, [{:__aliases__, _, [:Enum]}, :at]}, _, _}
-         ]} = node,
-        issues ->
-          {node, [build_issue(meta) | issues]}
+        # Pipeline form: ... |> Enum.sort(...) |> Enum.at(...)
+        {:|>, meta, [left, right]} = node, issues ->
+          if remote_call?(right, :Enum, :at) and remote_call?(rightmost(left), :Enum, :sort) do
+            {node, [build_issue(meta) | issues]}
+          else
+            {node, issues}
+          end
 
         # Nested call form: Enum.at(Enum.sort(...), index)
         {{:., _, [{:__aliases__, _, [:Enum]}, :at]}, meta,
@@ -47,6 +46,13 @@ defmodule Credence.Rule.NoSortThenAt do
       end)
 
     Enum.reverse(issues)
+  end
+
+  defp rightmost({:|>, _, [_, right]}), do: right
+  defp rightmost(other), do: other
+
+  defp remote_call?(node, mod, func) do
+    match?({{:., _, [{:__aliases__, _, [^mod]}, ^func]}, _, _}, node)
   end
 
   defp build_issue(meta) do

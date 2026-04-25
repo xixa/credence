@@ -2,7 +2,12 @@ defmodule Credence.Rule.NoLengthInGuardTest do
   use ExUnit.Case
   alias Credence.Issue
 
-  describe "analyze/2 - NoLengthInGuard Rule" do
+  defp check(code) do
+    {:ok, ast} = Code.string_to_quoted(code)
+    Credence.Rule.NoLengthInGuard.check(ast, [])
+  end
+
+  describe "NoLengthInGuard" do
     test "passes code that uses pattern matching instead of length" do
       code = """
       defmodule GoodCode do
@@ -14,10 +19,7 @@ defmodule Credence.Rule.NoLengthInGuardTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "passes code that uses length inside function body" do
@@ -30,10 +32,7 @@ defmodule Credence.Rule.NoLengthInGuardTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "detects length/1 in a guard with comparison" do
@@ -45,12 +44,11 @@ defmodule Credence.Rule.NoLengthInGuardTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
+      assert length(issues) == 1
 
-      issue = hd(result.issues)
+      issue = hd(issues)
       assert %Issue{} = issue
       assert issue.rule == :no_length_in_guard
       assert issue.severity == :warning
@@ -68,13 +66,10 @@ defmodule Credence.Rule.NoLengthInGuardTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
-      assert issue.rule == :no_length_in_guard
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_length_in_guard
     end
 
     test "detects length/1 in a defp guard" do
@@ -86,13 +81,10 @@ defmodule Credence.Rule.NoLengthInGuardTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
-      assert issue.rule == :no_length_in_guard
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_length_in_guard
     end
 
     test "ignores is_list and other guards" do
@@ -104,10 +96,7 @@ defmodule Credence.Rule.NoLengthInGuardTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
   end
 end

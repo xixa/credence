@@ -2,7 +2,12 @@ defmodule Credence.Rule.NoSortThenAtTest do
   use ExUnit.Case
   alias Credence.Issue
 
-  describe "analyze/2 - NoSortThenAt Rule" do
+  defp check(code) do
+    {:ok, ast} = Code.string_to_quoted(code)
+    Credence.Rule.NoSortThenAt.check(ast, [])
+  end
+
+  describe "NoSortThenAt" do
     test "passes code that uses Enum.min or Enum.max" do
       code = """
       defmodule GoodCode do
@@ -11,10 +16,7 @@ defmodule Credence.Rule.NoSortThenAtTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "passes code that sorts and takes multiple elements" do
@@ -26,10 +28,7 @@ defmodule Credence.Rule.NoSortThenAtTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "detects Enum.sort |> Enum.at pipeline" do
@@ -41,12 +40,10 @@ defmodule Credence.Rule.NoSortThenAtTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
+      assert length(issues) == 1
+      issue = hd(issues)
       assert %Issue{} = issue
       assert issue.rule == :no_sort_then_at
       assert issue.severity == :info
@@ -64,13 +61,10 @@ defmodule Credence.Rule.NoSortThenAtTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
-      assert issue.rule == :no_sort_then_at
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_sort_then_at
     end
 
     test "ignores Enum.at on non-sorted lists" do
@@ -82,10 +76,7 @@ defmodule Credence.Rule.NoSortThenAtTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
   end
 end

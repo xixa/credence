@@ -2,7 +2,12 @@ defmodule Credence.Rule.NoStringLengthForCharCheckTest do
   use ExUnit.Case
   alias Credence.Issue
 
-  describe "analyze/2 - NoStringLengthForCharCheck Rule" do
+  defp check(code) do
+    {:ok, ast} = Code.string_to_quoted(code)
+    Credence.Rule.NoStringLengthForCharCheck.check(ast, [])
+  end
+
+  describe "NoStringLengthForCharCheck" do
     test "passes code that uses pattern matching for single char" do
       code = """
       defmodule GoodCheck do
@@ -12,10 +17,7 @@ defmodule Credence.Rule.NoStringLengthForCharCheckTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "detects String.length(x) != 1" do
@@ -31,12 +33,10 @@ defmodule Credence.Rule.NoStringLengthForCharCheckTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
+      assert length(issues) == 1
+      issue = hd(issues)
       assert %Issue{} = issue
       assert issue.rule == :no_string_length_for_char_check
       assert issue.severity == :info
@@ -53,13 +53,10 @@ defmodule Credence.Rule.NoStringLengthForCharCheckTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
-      assert issue.rule == :no_string_length_for_char_check
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_string_length_for_char_check
     end
 
     test "detects reversed form: 1 == String.length(x)" do
@@ -71,10 +68,9 @@ defmodule Credence.Rule.NoStringLengthForCharCheckTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
+      assert length(issues) == 1
     end
 
     test "ignores String.length compared to other numbers" do
@@ -86,13 +82,7 @@ defmodule Credence.Rule.NoStringLengthForCharCheckTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      # Only flags comparison with literal 1
-      string_len_issues =
-        Enum.filter(result.issues, &(&1.rule == :no_string_length_for_char_check))
-
-      assert string_len_issues == []
+      assert check(code) == []
     end
 
     test "ignores length/1 (not String.length)" do
@@ -104,12 +94,7 @@ defmodule Credence.Rule.NoStringLengthForCharCheckTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      string_len_issues =
-        Enum.filter(result.issues, &(&1.rule == :no_string_length_for_char_check))
-
-      assert string_len_issues == []
+      assert check(code) == []
     end
   end
 end

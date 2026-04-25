@@ -25,14 +25,15 @@ defmodule Credence.Rule.NoSortThenReverse do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Pipeline form: Enum.sort(...) |> Enum.reverse()
-        {:|>, meta,
-         [
-           {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, _},
-           {{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, _, _}
-         ]} = node,
-        issues ->
-          {node, [build_issue(meta) | issues]}
+        # Pipeline form: ... |> Enum.sort(...) |> Enum.reverse()
+        # `a |> b |> c` = {:|>, _, [{:|>, _, [a, b]}, c]}
+        # We check: right == Enum.reverse, and the rightmost call on the left is Enum.sort.
+        {:|>, meta, [left, right]} = node, issues ->
+          if remote_call?(right, :Enum, :reverse) and remote_call?(rightmost(left), :Enum, :sort) do
+            {node, [build_issue(meta) | issues]}
+          else
+            {node, issues}
+          end
 
         # Nested call form: Enum.reverse(Enum.sort(...))
         {{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, meta,
@@ -42,12 +43,6 @@ defmodule Credence.Rule.NoSortThenReverse do
         issues ->
           {node, [build_issue(meta) | issues]}
 
-        # Variable binding form:
-        # sorted = Enum.sort(x)    -- we track these
-        # ... Enum.reverse(sorted) -- and match here
-        #
-        # This requires two-pass or stateful tracking. We handle the simpler
-        # pipeline/nested forms above and use a second pass for the variable form.
         node, issues ->
           {node, issues}
       end)
@@ -62,13 +57,14 @@ defmodule Credence.Rule.NoSortThenReverse do
     # Pass 1: collect all variable names bound to Enum.sort(...)
     {_ast, sort_vars} =
       Macro.prewalk(ast, MapSet.new(), fn
+        # var = Enum.sort(...)
         {:=, _, [{var_name, _, nil}, {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, _}]} =
             node,
         acc
         when is_atom(var_name) ->
           {node, MapSet.put(acc, var_name)}
 
-        # Also match: sorted = x |> Enum.sort()
+        # var = x |> Enum.sort()
         {:=, _,
          [
            {var_name, _, nil},
@@ -85,10 +81,26 @@ defmodule Credence.Rule.NoSortThenReverse do
     if MapSet.size(sort_vars) == 0 do
       []
     else
-      # Pass 2: find Enum.reverse(var) where var is in sort_vars
+      # Pass 2: find Enum.reverse(var) or var |> Enum.reverse()
       {_ast, issues} =
         Macro.prewalk(ast, [], fn
-          {{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, meta, [{var_name, _, nil}]} = node,
+          # Enum.reverse(sorted_var)
+          {{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, meta,
+           [{var_name, _, nil}]} = node,
+          acc
+          when is_atom(var_name) ->
+            if MapSet.member?(sort_vars, var_name) do
+              {node, [build_issue(meta) | acc]}
+            else
+              {node, acc}
+            end
+
+          # sorted_var |> Enum.reverse()
+          {:|>, meta,
+           [
+             {var_name, _, nil},
+             {{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, _, _}
+           ]} = node,
           acc
           when is_atom(var_name) ->
             if MapSet.member?(sort_vars, var_name) do
@@ -103,6 +115,13 @@ defmodule Credence.Rule.NoSortThenReverse do
 
       Enum.reverse(issues)
     end
+  end
+
+  defp rightmost({:|>, _, [_, right]}), do: right
+  defp rightmost(other), do: other
+
+  defp remote_call?(node, mod, func) do
+    match?({{:., _, [{:__aliases__, _, [^mod]}, ^func]}, _, _}, node)
   end
 
   defp build_issue(meta) do

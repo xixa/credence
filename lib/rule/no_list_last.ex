@@ -30,7 +30,6 @@ defmodule Credence.Rule.NoListLast do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Match List.last(...)
         {{:., _, [{:__aliases__, _, [:List]}, :last]}, meta, _args} = node, issues ->
           issue = %Issue{
             rule: :no_list_last,

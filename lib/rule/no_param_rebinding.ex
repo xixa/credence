@@ -31,7 +31,6 @@ defmodule Credence.Rule.NoParamRebinding do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Match anonymous functions: fn args -> body end
         {:fn, _meta, clauses} = node, issues when is_list(clauses) ->
           new_issues =
             Enum.reduce(clauses, issues, fn
@@ -52,17 +51,13 @@ defmodule Credence.Rule.NoParamRebinding do
     Enum.reverse(issues)
   end
 
-  # Extract all variable names from a pattern (parameter list).
-  # This handles simple vars, tuple destructuring, list destructuring, etc.
   defp extract_var_names(ast) do
     {_ast, vars} =
       Macro.prewalk(ast, MapSet.new(), fn
-        # Skip pinned variables (^var) — these are matches, not bindings
         {:^, _, _} = node, acc ->
           {node, acc}
 
         {name, _, context} = node, acc when is_atom(name) and is_atom(context) ->
-          # Filter out special atoms like :_ and module aliases
           if name != :_ and not String.starts_with?(Atom.to_string(name), "_") do
             {node, MapSet.put(acc, name)}
           else
@@ -76,56 +71,33 @@ defmodule Credence.Rule.NoParamRebinding do
     vars
   end
 
-  # Walk the body looking for `var = ...` where `var` is in our param set.
-  # We only look at the top-level body, not nested fn's (those have their own scope).
   defp find_rebindings(body, param_vars, acc) do
     if MapSet.size(param_vars) == 0 do
       acc
     else
       {_ast, issues} =
         Macro.prewalk(body, acc, fn
-          # Skip nested fn's — they have their own parameter scope
+          # Don't descend into nested fn — it has its own scope
           {:fn, _, _} = node, issues ->
-            # Return node but don't descend (we'll use prewalk's normal recursion
-            # but the nested fn will be caught by the outer check/2 prewalk)
             {node, issues}
 
-          # Match: var = expr (where var is a param name being rebound)
+          # Simple rebinding: var = expr
           {:=, meta, [{var_name, _, context}, _rhs]} = node, issues
           when is_atom(var_name) and is_atom(context) ->
             if MapSet.member?(param_vars, var_name) do
-              issue = %Issue{
-                rule: :no_param_rebinding,
-                severity: :info,
-                message:
-                  "Variable `#{var_name}` shadows a parameter from the enclosing `fn`. " <>
-                    "Use a distinct name (e.g. `new_#{var_name}`) to avoid confusion.",
-                meta: %{line: Keyword.get(meta, :line)}
-              }
-
-              {node, [issue | issues]}
+              {node, [build_issue(var_name, meta) | issues]}
             else
               {node, issues}
             end
 
-          # Also match destructuring that rebinds: {a, b} = ... where a or b is a param
+          # Destructuring rebinding: {a, b} = expr where a or b is a param
           {:=, meta, [pattern, _rhs]} = node, issues ->
             rebound = extract_var_names([pattern])
             overlap = MapSet.intersection(rebound, param_vars)
 
             if MapSet.size(overlap) > 0 do
               var_name = overlap |> MapSet.to_list() |> hd()
-
-              issue = %Issue{
-                rule: :no_param_rebinding,
-                severity: :info,
-                message:
-                  "Variable `#{var_name}` shadows a parameter from the enclosing `fn`. " <>
-                    "Use a distinct name (e.g. `new_#{var_name}`) to avoid confusion.",
-                meta: %{line: Keyword.get(meta, :line)}
-              }
-
-              {node, [issue | issues]}
+              {node, [build_issue(var_name, meta) | issues]}
             else
               {node, issues}
             end
@@ -136,5 +108,16 @@ defmodule Credence.Rule.NoParamRebinding do
 
       issues
     end
+  end
+
+  defp build_issue(var_name, meta) do
+    %Issue{
+      rule: :no_param_rebinding,
+      severity: :info,
+      message:
+        "Variable `#{var_name}` shadows a parameter from the enclosing `fn`. " <>
+          "Use a distinct name (e.g. `new_#{var_name}`) to avoid confusion.",
+      meta: %{line: Keyword.get(meta, :line)}
+    }
   end
 end
