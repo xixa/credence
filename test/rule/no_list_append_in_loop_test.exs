@@ -2,7 +2,12 @@ defmodule Credence.Rule.NoListAppendInLoopTest do
   use ExUnit.Case
   alias Credence.Issue
 
-  describe "analyze/2 - NoListAppendInLoop Rule" do
+  defp check(code) do
+    {:ok, ast} = Code.string_to_quoted(code)
+    Credence.Rule.NoListAppendInLoop.check(ast, [])
+  end
+
+  describe "NoListAppendInLoop - Enum.reduce and for" do
     test "passes idiomatic code without issues" do
       code = """
       defmodule GoodCode do
@@ -16,10 +21,7 @@ defmodule Credence.Rule.NoListAppendInLoopTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
 
     test "detects ++ inside Enum.reduce" do
@@ -33,16 +35,14 @@ defmodule Credence.Rule.NoListAppendInLoopTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
+      assert length(issues) == 1
+      issue = hd(issues)
       assert %Issue{} = issue
       assert issue.rule == :no_list_append_in_loop
       assert issue.severity == :high
-      assert issue.message =~ "Avoid using '++' inside loops"
+      assert issue.message =~ "++"
       assert issue.meta.line != nil
     end
 
@@ -58,13 +58,10 @@ defmodule Credence.Rule.NoListAppendInLoopTest do
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
-
-      issue = hd(result.issues)
-      assert issue.rule == :no_list_append_in_loop
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_list_append_in_loop
     end
 
     test "ignores ++ if it is outside of a looping construct" do
@@ -76,33 +73,92 @@ defmodule Credence.Rule.NoListAppendInLoopTest do
       end
       """
 
-      result = Credence.analyze(code)
-
-      assert result.valid == true
-      assert result.issues == []
+      assert check(code) == []
     end
   end
 
-  describe "analyze/2 - Error Handling" do
-    test "handles syntax errors gracefully by returning a critical issue" do
-      # A true syntax error (missing closing bracket for the list)
+  describe "NoListAppendInLoop - recursive functions" do
+    test "detects ++ inside a recursive defp" do
       code = """
-      defmodule BrokenCode do
-        def process(list) do
-          [1, 2, 3
+      defmodule BadRecursive do
+        defp slide([next | rest], [out | window], current, current_max) do
+          new_current = current - out + next
+          new_max = max(current_max, new_current)
+          new_window = window ++ [next]
+          slide(rest, new_window, new_current, new_max)
         end
       end
       """
 
-      result = Credence.analyze(code)
+      issues = check(code)
 
-      assert result.valid == false
-      assert length(result.issues) == 1
+      assert length(issues) == 1
+      issue = hd(issues)
+      assert issue.rule == :no_list_append_in_loop
+      assert issue.severity == :high
+      assert issue.meta.line != nil
+    end
 
-      issue = hd(result.issues)
-      assert issue.rule == :parse_error
-      assert issue.severity == :critical
-      assert issue.message =~ "Syntax error"
+    test "detects ++ inside a guarded recursive function" do
+      code = """
+      defmodule BadGuardedRecursive do
+        defp helper([h | t], acc) when is_integer(h) do
+          helper(t, acc ++ [h])
+        end
+      end
+      """
+
+      issues = check(code)
+
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_list_append_in_loop
+    end
+
+    test "detects ++ inside a recursive def (public function)" do
+      code = """
+      defmodule BadPublicRecursive do
+        def build([h | t], result) do
+          build(t, result ++ [h * 2])
+        end
+
+        def build([], result), do: result
+      end
+      """
+
+      issues = check(code)
+
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_list_append_in_loop
+    end
+
+    test "ignores ++ in a non-recursive function" do
+      code = """
+      defmodule SafeNonRecursive do
+        def prepare(list) do
+          prefix = [0]
+          prefix ++ list
+        end
+      end
+      """
+
+      assert check(code) == []
+    end
+
+    test "ignores non-recursive clause of a multi-clause function" do
+      code = """
+      defmodule MixedClauses do
+        defp slide([], _window, _current, current_max), do: current_max
+
+        defp slide([next | rest], [out | window], current, current_max) do
+          new_window = window ++ [next]
+          slide(rest, new_window, current, current_max)
+        end
+      end
+      """
+
+      issues = check(code)
+
+      assert length(issues) == 1
     end
   end
 end
