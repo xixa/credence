@@ -32,6 +32,7 @@ defmodule Credence do
     Credence.Rule.NoNestedEnumOnSameEnumerable,
     Credence.Rule.NoParamRebinding,
     Credence.Rule.NoRedundantEnumJoinSeparator,
+    Credence.Rule.NoRedundantNegatedGuard,
     Credence.Rule.NoRepeatedEnumTraversal,
     Credence.Rule.NoSortForTopK,
     Credence.Rule.NoSortThenAt,
