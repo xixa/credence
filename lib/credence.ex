@@ -23,6 +23,7 @@ defmodule Credence do
     Credence.Rule.NoListAppendInLoop,
     Credence.Rule.NoListFold,
     Credence.Rule.NoListLast,
+    Credence.Rule.NoManualListLast,
     Credence.Rule.NoManualMax,
     Credence.Rule.NoManualMin,
     Credence.Rule.NoManualStringReverse,
@@ -43,7 +44,8 @@ defmodule Credence do
     Credence.Rule.NoUnnecessaryCatchAllRaise,
     Credence.Rule.RedundantListGuard,
     Credence.Rule.PreferEnumSlice,
-    Credence.Rule.UnnecessaryGraphemeChunking
+    Credence.Rule.UnnecessaryGraphemeChunking,
+    Credence.Rule.UseMapJoin
   ]
 
   @doc """
