@@ -7,6 +7,8 @@ defmodule Credence do
 
   # The default profile of rules to run
   @default_rules [
+    Credence.Rule.AvoidGraphemesEnumCount,
+    Credence.Rule.AvoidGraphemesLength,
     Credence.Rule.DescriptiveNames,
     Credence.Rule.NoDoubleSortSameList,
     Credence.Rule.NoEnumAtBinarySearch,
