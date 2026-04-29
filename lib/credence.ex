@@ -23,6 +23,7 @@ defmodule Credence do
     Credence.Rule.NoListAppendInLoop,
     Credence.Rule.NoListFold,
     Credence.Rule.NoListLast,
+    Credence.Rule.NoManualEnumUniq,
     Credence.Rule.NoManualMax,
     Credence.Rule.NoManualMin,
     Credence.Rule.NoManualStringReverse,

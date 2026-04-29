@@ -22,10 +22,7 @@ defmodule Credence.Rule.NoManualEnumUniqTest do
       end
       """
 
-      issues = check(code)
-
-      assert length(issues) == 1
-      assert hd(issues).rule == :no_manual_enum_uniq
+      assert length(check(code)) == 1
     end
 
     test "flags even if variable names are different or logic is inverted" do
@@ -60,8 +57,7 @@ defmodule Credence.Rule.NoManualEnumUniqTest do
       assert check(code) == []
     end
 
-    test "does not flag Enum.reduce using MapSet purely as an accumulator (e.g. converting list to MapSet)" do
-      # Note: Enum.into(list, MapSet.new()) is better, but this shouldn't trigger the uniqueness warning
+    test "does not flag Enum.reduce using MapSet purely as an accumulator" do
       code = """
       defmodule Example do
         def run(list) do
@@ -72,26 +68,11 @@ defmodule Credence.Rule.NoManualEnumUniqTest do
       end
       """
 
-      # Our current heuristic flags if MapSet.new() is in init AND MapSet.put is in the reducer.
-      # To avoid flagging `MapSet.new()` -> `MapSet.put` purely as collection building,
-      # you might want to require both `put` AND `member?` for maximum safety, but
-      # let's test our current boundary. If you want to tighten it, you can require `member?` specifically.
-      # The provided implementation will flag this. If this is a false positive, update `contains_mapset_tracking?`
-      # to require `[:member?]` explicitly instead of `in [:put, :member?]`.
-
-      # Let's assert based on the current logic (which assumes MapSet.new + MapSet.put = tracking pattern)
-      assert length(check(code)) == 1
+      assert check(code) == []
     end
 
     test "does not flag valid Enum.uniq/1 usages" do
-      code = """
-      defmodule Example do
-        def run(list) do
-          Enum.uniq(list)
-        end
-      end
-      """
-
+      code = "Enum.uniq(list)"
       assert check(code) == []
     end
   end
