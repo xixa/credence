@@ -1,10 +1,10 @@
 defmodule Credence.Rule.NoManualEnumUniq do
   @moduledoc """
-  Detects manual reimplementation of Enum.uniq/1 or Enum.uniq_by/2
-  using Enum.reduce/3 + MapSet in a deduplication pattern.
+  Performance and idiomatic code rule: warns when `Enum.uniq/1` is manually
+  reimplemented using `Enum.reduce/3` and `MapSet`.
 
-  This version avoids false positives by requiring a strict structural
-  pattern: MapSet-based "seen + accumulator list" tuple reduction.
+  Lists are deduplicated most efficiently using the built-in `Enum.uniq/1`
+  or `Enum.uniq_by/2`, which are implemented natively.
   """
 
   @behaviour Credence.Rule
@@ -14,9 +14,10 @@ defmodule Credence.Rule.NoManualEnumUniq do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
+        # Matches Enum.reduce(list, {MapSet.new(), []}, fn ...)
         {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, meta, [_list, init_acc, fun]} = node,
         issues ->
-          if uniq_like_reduce?(init_acc, fun) do
+          if manual_uniq?(init_acc, fun) do
             {node, [trigger_issue(meta) | issues]}
           else
             {node, issues}
@@ -30,61 +31,101 @@ defmodule Credence.Rule.NoManualEnumUniq do
   end
 
   # ------------------------------------------------------------
-  # STRICT STRUCTURAL DETECTION
+  # PATTERN MATCHING LOGIC
   # ------------------------------------------------------------
 
-  defp uniq_like_reduce?(init_acc, fun) do
-    match_seen_acc_tuple?(init_acc) and matches_dedup_lambda?(fun)
+  defp manual_uniq?(init_acc, fun) do
+    # 1. Find which index (0 or 1) in the tuple contains the MapSet.new()
+    case find_mapset_index(init_acc) do
+      nil ->
+        false
+
+      index ->
+        # 2. Check if the lambda uses that index specifically to deduplicate the item
+        matches_dedup_lambda?(fun, index)
+    end
   end
 
-  # FIX: 2-element tuples in AST are just `{elem1, elem2}`.
-  # We check both positions to support {MapSet.new(), []} or {[], MapSet.new()}
-  defp match_seen_acc_tuple?({elem1, elem2}) do
-    mapset_init?(elem1) or mapset_init?(elem2)
+  # Detects {MapSet.new(), ...} (index 0) or {..., MapSet.new()} (index 1)
+  defp find_mapset_index({e1, e2}) do
+    cond do
+      mapset_init?(e1) -> 0
+      mapset_init?(e2) -> 1
+      true -> nil
+    end
   end
-  defp match_seen_acc_tuple?(_), do: false
+
+  defp find_mapset_index(_), do: nil
 
   defp mapset_init?({{:., _, [{:__aliases__, _, [:MapSet]}, :new]}, _, _}), do: true
   defp mapset_init?(_), do: false
 
-  # ------------------------------------------------------------
-  # DETECT TRUE "ENUM.UNIQ REIMPLEMENTATION" LAMBDA
-  # ------------------------------------------------------------
+  defp matches_dedup_lambda?({:fn, _, clauses}, ms_index) do
+    Enum.any?(clauses, fn
+      {:->, _, [[item_pattern, acc_pattern], body]} ->
+        item_var = get_var_name(item_pattern)
+        seen_var = get_var_name_at_index(acc_pattern, ms_index)
 
-  defp matches_dedup_lambda?({:fn, _, clauses}) do
-    Enum.any?(clauses, &match_dedup_clause?/1)
+        if item_var && seen_var do
+          is_conditional_dedup?(body, seen_var, item_var)
+        else
+          false
+        end
+
+      _ ->
+        false
+    end)
   end
-  defp matches_dedup_lambda?(_), do: false
 
-  defp match_dedup_clause?({:->, _, [[_item, acc_arg], body]}) do
-    # Acc arg should be a 2-tuple pattern (like `{seen, acc}` or `{acc, seen}`)
-    is_2_tuple_pattern?(acc_arg) and uses_mapset_dedup?(body)
+  defp matches_dedup_lambda?(_, _), do: false
+
+  defp get_var_name({name, _, nil}) when is_atom(name), do: name
+  defp get_var_name(_), do: nil
+
+  defp get_var_name_at_index({left, right}, index) do
+    target = if index == 0, do: left, else: right
+    get_var_name(target)
   end
-  defp match_dedup_clause?(_), do: false
 
-  defp is_2_tuple_pattern?({_, _}), do: true
-  defp is_2_tuple_pattern?(_), do: false
+  defp get_var_name_at_index(_, _), do: nil
 
-  # FIX: Removed `^seen_var` pinning. Searching the body for the presence
-  # of `member?` and `put` inside a 2-tuple reduction is highly accurate.
-  defp uses_mapset_dedup?(body) do
-    has_member =
+  # Scans the function body for a conditional (if/unless/case)
+  # that is powered by MapSet.member?(seen_var, item_var)
+  defp is_conditional_dedup?(body, seen_var, item_var) do
+    {_, found?} =
       Macro.prewalk(body, false, fn
-        {{:., _, [{:__aliases__, _, [:MapSet]}, :member?]}, _, _} = node, _ -> {node, true}
-        node, acc -> {node, acc}
-      end) |> elem(1)
+        {type, _, [condition | _]} = node, acc when type in [:if, :unless, :case] ->
+          if uses_mapset_member?(condition, seen_var, item_var) do
+            {node, true}
+          else
+            {node, acc}
+          end
 
-    has_put =
-      Macro.prewalk(body, false, fn
-        {{:., _, [{:__aliases__, _, [:MapSet]}, :put]}, _, _} = node, _ -> {node, true}
-        node, acc -> {node, acc}
-      end) |> elem(1)
+        node, acc ->
+          {node, acc}
+      end)
 
-    has_member and has_put
+    found?
+  end
+
+  defp uses_mapset_member?(condition, seen_var, item_var) do
+    case condition do
+      # Match: MapSet.member?(seen, item)
+      {{:., _, [{:__aliases__, _, [:MapSet]}, :member?]}, _,
+       [{^seen_var, _, nil}, {^item_var, _, nil}]} ->
+        true
+
+      # Match: !MapSet.member?(...) or not MapSet.member?(...)
+      {op, _, [inner]} when op in [:!, :not] ->
+        uses_mapset_member?(inner, seen_var, item_var)
+
+      _ ->
+        false
+    end
   end
 
   # ------------------------------------------------------------
-  # ISSUE
+  # ISSUE DATA
   # ------------------------------------------------------------
 
   defp trigger_issue(meta) do
@@ -92,13 +133,13 @@ defmodule Credence.Rule.NoManualEnumUniq do
       rule: :no_manual_enum_uniq,
       severity: :warning,
       message: """
-      Manual reimplementation of Enum.uniq/1 detected.
+      Manual reimplementation of `Enum.uniq/1` detected.
 
-      This pattern uses Enum.reduce/3 with a MapSet "seen" accumulator
-      and a filtered list accumulator, which is equivalent to Enum.uniq/1
-      but significantly more verbose.
+      This pattern uses `Enum.reduce/3` with a `MapSet` to filter duplicates.
+      This is significantly more verbose and less efficient than the built-in
+      function.
 
-      Prefer:
+      Consider using:
         Enum.uniq(list)
       """,
       meta: %{line: Keyword.get(meta, :line)}
