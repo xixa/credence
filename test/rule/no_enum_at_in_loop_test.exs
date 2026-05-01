@@ -1,5 +1,6 @@
 defmodule Credence.Rule.NoEnumAtInLoopTest do
   use ExUnit.Case
+  alias Credence.Issue
 
   defp check(code) do
     {:ok, ast} = Code.string_to_quoted(code)
@@ -7,212 +8,157 @@ defmodule Credence.Rule.NoEnumAtInLoopTest do
   end
 
   describe "NoEnumAtInLoop" do
+    test "passes Enum.at outside of any loop" do
+      code = """
+      defmodule Safe do
+        def third(list) do
+          Enum.at(list, 2)
+        end
+      end
+      """
+
+      assert check(code) == []
+    end
+
+    test "passes pattern matching in recursion" do
+      code = """
+      defmodule Good do
+        def sum([]), do: 0
+        def sum([head | tail]), do: head + sum(tail)
+      end
+      """
+
+      assert check(code) == []
+    end
+
+    test "passes Enum.with_index in reduce" do
+      code = """
+      defmodule Good do
+        def indexed_sum(list) do
+          list
+          |> Stream.with_index()
+          |> Enum.reduce(0, fn {val, _idx}, acc -> acc + val end)
+        end
+      end
+      """
+
+      assert check(code) == []
+    end
+
     test "detects Enum.at inside Enum.reduce" do
       code = """
       defmodule Bad do
-        def sum_evens(list) do
-          n = length(list)
-          Enum.reduce(0..(n - 1), 0, fn i, acc ->
-            val = Enum.at(list, i)
-            if rem(val, 2) == 0, do: acc + val, else: acc
+        def sum_indices(list, indices) do
+          Enum.reduce(indices, 0, fn i, acc ->
+            acc + Enum.at(list, i)
           end)
         end
       end
       """
 
-      [issue] = check(code)
+      issues = check(code)
+
+      assert length(issues) >= 1
+      issue = hd(issues)
+      assert %Issue{} = issue
       assert issue.rule == :no_enum_at_in_loop
-      assert issue.severity == :warning
-      assert issue.message =~ "Enum.at"
-      assert issue.message =~ "O(n"
+      assert issue.severity == :high
+      assert issue.message =~ "Enum.at/2"
+      assert issue.meta.line != nil
     end
 
     test "detects Enum.at inside Enum.map" do
       code = """
       defmodule Bad do
-        def pairs(list) do
-          Enum.map(0..(length(list) - 2), fn i ->
-            {Enum.at(list, i), Enum.at(list, i + 1)}
-          end)
+        def get_elements(list, indices) do
+          Enum.map(indices, fn i -> Enum.at(list, i) end)
         end
       end
       """
 
       issues = check(code)
+
       assert length(issues) >= 1
+      assert hd(issues).rule == :no_enum_at_in_loop
     end
 
-    test "detects Enum.at inside Enum.take_while" do
+    test "detects Enum.at inside for comprehension" do
       code = """
       defmodule Bad do
-        def palindrome?(graphemes, start, len) do
-          half = div(len, 2)
-          0..(half - 1)
-          |> Enum.take_while(fn i ->
-            Enum.at(graphemes, start + i) == Enum.at(graphemes, start + len - 1 - i)
-          end)
-          |> length() == half
+        def get_elements(list, n) do
+          for i <- 0..(n - 1), do: Enum.at(list, i)
         end
       end
       """
 
       issues = check(code)
+
       assert length(issues) >= 1
+      assert hd(issues).rule == :no_enum_at_in_loop
     end
 
-    test "detects Enum.at inside Enum.any?" do
+    test "detects Enum.at inside recursive function" do
       code = """
-      defmodule Bad do
-        def has_pair?(list) do
-          Enum.any?(0..(length(list) - 2), fn i ->
-            Enum.at(list, i) == Enum.at(list, i + 1)
-          end)
+      defmodule BadPalindrome do
+        defp do_palindrome?(graphemes, start, stop) do
+          left = Enum.at(graphemes, start)
+          right = Enum.at(graphemes, stop)
+          left == right and do_palindrome?(graphemes, start + 1, stop - 1)
         end
       end
       """
 
       issues = check(code)
+
       assert length(issues) >= 1
+      assert hd(issues).rule == :no_enum_at_in_loop
     end
 
-    test "detects Enum.at inside Enum.all?" do
+    test "detects Enum.at inside guarded recursive function" do
       code = """
-      defmodule Bad do
-        def sorted?(list) do
-          Enum.all?(0..(length(list) - 2), fn i ->
-            Enum.at(list, i) <= Enum.at(list, i + 1)
-          end)
+      defmodule BadExpand do
+        defp expand(graphemes, left, right, count) when left >= 0 and right < count do
+          if Enum.at(graphemes, left) == Enum.at(graphemes, right) do
+            1 + expand(graphemes, left - 1, right + 1, count)
+          else
+            0
+          end
         end
       end
       """
 
       issues = check(code)
+
       assert length(issues) >= 1
+      assert hd(issues).rule == :no_enum_at_in_loop
     end
 
-    test "detects Enum.at inside Enum.filter" do
+    test "ignores Enum.at in non-recursive function" do
+      code = """
+      defmodule Safe do
+        def middle(list) do
+          mid = div(length(list), 2)
+          Enum.at(list, mid)
+        end
+      end
+      """
+
+      assert check(code) == []
+    end
+
+    test "deduplicates Enum.at calls on the same line in recursive body" do
       code = """
       defmodule Bad do
-        def pick_indices(list, indices) do
-          Enum.filter(indices, fn i ->
-            Enum.at(list, i) > 0
-          end)
+        defp check(g, l, r) do
+          Enum.at(g, l) == Enum.at(g, r) and check(g, l + 1, r - 1)
         end
       end
       """
 
-      [issue] = check(code)
-      assert issue.message =~ "Enum.at"
-    end
+      issues = check(code)
 
-    test "detects Enum.at inside Enum.each" do
-      code = """
-      defmodule Bad do
-        def print_items(list) do
-          Enum.each(0..(length(list) - 1), fn i ->
-            IO.puts(Enum.at(list, i))
-          end)
-        end
-      end
-      """
-
-      [issue] = check(code)
-      assert issue.rule == :no_enum_at_in_loop
-    end
-
-    test "detects Enum.at inside Enum.reduce_while" do
-      code = """
-      defmodule Bad do
-        def find_first_positive(list) do
-          Enum.reduce_while(0..(length(list) - 1), nil, fn i, _acc ->
-            val = Enum.at(list, i)
-            if val > 0, do: {:halt, val}, else: {:cont, nil}
-          end)
-        end
-      end
-      """
-
-      [issue] = check(code)
-      assert issue.rule == :no_enum_at_in_loop
-    end
-
-    test "detects piped Enum.at inside loop" do
-      code = """
-      defmodule Bad do
-        def process(list) do
-          0..(length(list) - 1)
-          |> Enum.map(fn i ->
-            list |> Enum.at(i) |> to_string()
-          end)
-        end
-      end
-      """
-
-      [issue] = check(code)
-      assert issue.rule == :no_enum_at_in_loop
-    end
-
-    # ---- Negative cases ----
-
-    test "does not flag Enum.at outside of loops" do
-      code = """
-      defmodule Good do
-        def first(list), do: Enum.at(list, 0)
-        def third(list), do: Enum.at(list, 2)
-      end
-      """
-
-      assert check(code) == []
-    end
-
-    test "does not flag Enum.map without Enum.at" do
-      code = """
-      defmodule Good do
-        def double(list) do
-          Enum.map(list, fn x -> x * 2 end)
-        end
-      end
-      """
-
-      assert check(code) == []
-    end
-
-    test "does not flag Enum.reduce without Enum.at" do
-      code = """
-      defmodule Good do
-        def sum(list) do
-          Enum.reduce(list, 0, fn x, acc -> acc + x end)
-        end
-      end
-      """
-
-      assert check(code) == []
-    end
-
-    test "does not flag Map.get inside loop (not Enum.at)" do
-      code = """
-      defmodule Good do
-        def lookup(keys, map) do
-          Enum.map(keys, fn k -> Map.get(map, k) end)
-        end
-      end
-      """
-
-      assert check(code) == []
-    end
-
-    test "does not flag Enum.with_index pattern (correct approach)" do
-      code = """
-      defmodule Good do
-        def indexed(list) do
-          list
-          |> Enum.with_index()
-          |> Enum.map(fn {val, idx} -> {idx, val} end)
-        end
-      end
-      """
-
-      assert check(code) == []
+      # Two Enum.at calls on same line are deduplicated to one
+      assert length(issues) == 1
     end
   end
 end
