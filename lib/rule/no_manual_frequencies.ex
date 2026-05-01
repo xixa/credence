@@ -25,8 +25,8 @@ defmodule Credence.Rule.NoManualFrequencies do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
         # Enum.reduce(list, %{}, fn ... -> Map.update(...) end)
-        {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, meta,
-         [_list, {:%{}, _, []}, body]} = node,
+        {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, meta, [_list, {:%{}, _, []}, body]} =
+            node,
         issues ->
           if body_has_map_update?(body) do
             {node, [build_issue(meta) | issues]}

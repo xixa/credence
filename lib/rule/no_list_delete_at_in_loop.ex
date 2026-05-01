@@ -62,12 +62,12 @@ defmodule Credence.Rule.NoListDeleteAtInLoop do
   defp find_in_recursive(ast) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        {kind, _meta, [{name, _, _params}, body_kw]} = node, issues
+        {kind, _meta, [{:when, _, [{name, _, _params}, _guard]}, body_kw]} = node, issues
         when kind in [:def, :defp] and is_atom(name) ->
           body = extract_body(body_kw)
           {node, check_recursive_body(body, name, issues)}
 
-        {kind, _meta, [{:when, _, [{name, _, _params}, _guard]}, body_kw]} = node, issues
+        {kind, _meta, [{name, _, _params}, body_kw]} = node, issues
         when kind in [:def, :defp] and is_atom(name) ->
           body = extract_body(body_kw)
           {node, check_recursive_body(body, name, issues)}

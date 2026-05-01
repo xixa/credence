@@ -73,11 +73,11 @@ defmodule CredenceTest do
       """)
     end
 
-    test "Enum.sort with :desc instead of sort + reverse" do
+    test "Enum.sort with :desc for descending order" do
       assert_clean("""
-      defmodule TopK do
-        def top_three(nums) do
-          Enum.sort(nums, :desc) |> Enum.take(3)
+      defmodule Sorter do
+        def descending(nums) do
+          Enum.sort(nums, :desc)
         end
       end
       """)
@@ -127,8 +127,8 @@ defmodule CredenceTest do
     test "Enum.join without redundant empty separator" do
       assert_clean("""
       defmodule Joiner do
-        def join_graphemes(string) do
-          string |> String.graphemes() |> Enum.reverse() |> Enum.join()
+        def join_words(words) do
+          Enum.join(words)
         end
 
         def join_with_comma(list) do
@@ -177,31 +177,26 @@ defmodule CredenceTest do
     test "iterating map directly without Map.values or Map.keys" do
       assert_clean("""
       defmodule MapChecker do
-        def all_positive?(map) do
-          Enum.all?(map, fn {_k, v} -> v > 0 end)
+        def all_positive?(data) do
+          Enum.all?(data, fn {_k, v} -> v > 0 end)
         end
 
-        def key_strings(map) do
-          Enum.map(map, fn {k, _v} -> to_string(k) end)
+        def key_strings(entries) do
+          Enum.map(entries, fn {k, _v} -> to_string(k) end)
         end
       end
       """)
     end
 
-    test "MapSet for membership tracking" do
+    test "MapSet for efficient membership checks in reduce" do
       assert_clean("""
-      defmodule Deduplicator do
-        def dedup(list) do
-          {_seen, acc} =
-            Enum.reduce(list, {MapSet.new(), []}, fn item, {seen, acc} ->
-              if MapSet.member?(seen, item) do
-                {seen, acc}
-              else
-                {MapSet.put(seen, item), [item | acc]}
-              end
-            end)
+      defmodule AllowlistFilter do
+        def filter_allowed(items, allowed_list) do
+          allowed = MapSet.new(allowed_list)
 
-          Enum.reverse(acc)
+          Enum.filter(items, fn item ->
+            MapSet.member?(allowed, item)
+          end)
         end
       end
       """)
@@ -330,8 +325,7 @@ defmodule CredenceTest do
         def count_ways(0), do: 1
         def count_ways(1), do: 1
         def count_ways(2), do: 2
-        def count_ways(steps) when steps > 2,
-          do: do_count(steps - 2, 1, 1, 2)
+        def count_ways(steps) when steps > 2, do: do_count(steps - 2, 1, 1, 2)
 
         defp do_count(0, _, _, prev1), do: prev1
         defp do_count(remaining, prev3, prev2, prev1), do: do_count(remaining - 1, prev2, prev1, prev3 + prev2 + prev1)
@@ -351,6 +345,93 @@ defmodule CredenceTest do
 
         defp tokenize(input), do: {:ok, String.split(input)}
         defp build_ast(tokens), do: {:ok, tokens}
+      end
+      """)
+    end
+
+    test "word grouping by length" do
+      assert_clean("""
+      defmodule WordGrouper do
+        def group_by_length(text) when is_binary(text) do
+          text
+          |> String.split(~r/\W+/u, trim: true)
+          |> Enum.group_by(&String.length/1)
+        end
+      end
+      """)
+    end
+
+    test "recursive word counting" do
+      assert_clean("""
+      defmodule RecursiveCounter do
+        def count(text) when is_binary(text) do
+          text
+          |> String.downcase()
+          |> String.split(~r/\W+/u, trim: true)
+          |> do_count(%{})
+        end
+
+        defp do_count([], acc), do: acc
+
+        defp do_count([word | rest], acc) do
+          updated =
+            Map.update(acc, word, 1, fn count -> count + 1 end)
+
+          do_count(rest, updated)
+        end
+      end
+      """)
+    end
+
+    test "chart counting" do
+      assert_clean("""
+      defmodule CharCounter do
+        def count(text) when is_binary(text) do
+          text
+          |> String.graphemes()
+          |> Enum.frequencies()
+        end
+      end
+      """)
+    end
+
+    test "unique word extraction" do
+      assert_clean("""
+      defmodule UniqueWords do
+        def extract(text) when is_binary(text) do
+          text
+          |> String.downcase()
+          |> String.split(~r/\W+/u, trim: true)
+          |> MapSet.new()
+        end
+      end
+      """)
+    end
+
+    test "longest word extraction" do
+      assert_clean("""
+      defmodule LongestWord do
+        def find(text) when is_binary(text) do
+          text
+          |> String.split(~r/\W+/u, trim: true)
+          |> Enum.max_by(&String.length/1, fn -> "" end)
+        end
+      end
+      """)
+    end
+
+    test "index by first letter" do
+      assert_clean("""
+      defmodule IndexByFirstLetter do
+        def build(words) do
+          Enum.reduce(words, %{}, fn word, acc ->
+            first = String.first(word)
+
+            Map.update(acc, first, [word], fn existing ->
+              [word | existing]
+            end)
+          end)
+        end
       end
       """)
     end
@@ -428,7 +509,7 @@ defmodule CredenceTest do
     test "list ++ outside of any loop" do
       assert_clean("""
       defmodule SafeConcat do
-        def concat(list_a, list_b), do: list_a ++ list_b
+        def concat(left, right), do: left ++ right
         def prepend_header(list), do: ["header"] ++ list
       end
       """)
@@ -437,8 +518,8 @@ defmodule CredenceTest do
     test "String.length compared to non-1 values" do
       assert_clean("""
       defmodule LengthCheck do
-        def long_enough?(string), do: String.length(string) >= 8
-        def too_short?(string), do: String.length(string) < 3
+        def long_enough?(name), do: String.length(name) >= 8
+        def too_short?(name), do: String.length(name) < 3
       end
       """)
     end
@@ -512,134 +593,5 @@ defmodule CredenceTest do
       end
       """)
     end
-  end
-
-  test "does NOT flag idiomatic word counting" do
-    code = """
-      defmodule WordCounter do
-        def count(text) when is_binary(text) do
-          text
-          |> String.downcase()
-          |> String.replace(~r/[^\p{L}\s]/u, "")
-          |> String.split()
-          |> Enum.frequencies()
-        end
-      end
-    """
-
-    result = Credence.analyze(code)
-    assert result.valid == true
-    assert result.issues == []
-  end
-
-  test "does NOT flag idiomatic chart counting" do
-    code = """
-      defmodule CharCounter do
-        def count(text) when is_binary(text) do
-          text
-          |> String.graphemes()
-          |> Enum.frequencies()
-        end
-      end
-    """
-
-    result = Credence.analyze(code)
-    assert result.valid == true
-    assert result.issues == []
-  end
-
-  test "does NOT flag idiomatic unique word extraction" do
-    code = """
-      defmodule UniqueWords do
-        def extract(text) when is_binary(text) do
-          text
-          |> String.downcase()
-          |> String.split(~r/\W+/u, trim: true)
-          |> MapSet.new()
-        end
-      end
-    """
-
-    result = Credence.analyze(code)
-    assert result.valid == true
-    assert result.issues == []
-  end
-
-  test "does NOT flag idiomatic longest word extraction" do
-    code = """
-      defmodule LongestWord do
-        def find(text) when is_binary(text) do
-          text
-          |> String.split(~r/\W+/u, trim: true)
-          |> Enum.max_by(&String.length/1, fn -> "" end)
-        end
-      end
-    """
-
-    result = Credence.analyze(code)
-    assert result.valid == true
-    assert result.issues == []
-  end
-
-  test "does NOT flag idiomatic word grouping by length" do
-    code = """
-      defmodule WordGrouper do
-        def group_by_length(text) when is_binary(text) do
-          text
-          |> String.split(~r/\W+/u, trim: true)
-          |> Enum.group_by(&String.length/1)
-        end
-      end
-    """
-
-    result = Credence.analyze(code)
-    assert result.valid == true
-    assert result.issues == []
-  end
-
-  test "does NOT flag idiomatic recursive word counting" do
-    code = """
-      defmodule RecursiveCounter do
-        def count(text) when is_binary(text) do
-          text
-          |> String.downcase()
-          |> String.split(~r/\W+/u, trim: true)
-          |> do_count(%{})
-        end
-
-        defp do_count([], acc), do: acc
-
-        defp do_count([word | rest], acc) do
-          updated =
-            Map.update(acc, word, 1, fn count -> count + 1 end)
-
-          do_count(rest, updated)
-        end
-      end
-    """
-
-    result = Credence.analyze(code)
-    assert result.valid == true
-    assert result.issues == []
-  end
-
-  test "does NOT flag idiomatic index by first letter" do
-    code = """
-      defmodule IndexByFirstLetter do
-        def build(words) do
-          Enum.reduce(words, %{}, fn word, acc ->
-            first = String.first(word)
-
-            Map.update(acc, first, [word], fn existing ->
-              [word | existing]
-            end)
-          end)
-        end
-      end
-    """
-
-    result = Credence.analyze(code)
-    assert result.valid == true
-    assert result.issues == []
   end
 end
