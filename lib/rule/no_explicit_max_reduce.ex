@@ -17,6 +17,9 @@ defmodule Credence.Rule.NoExplicitMaxReduce do
   alias Credence.Issue
 
   @impl true
+  def fixable?, do: true
+
+  @impl true
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
@@ -39,6 +42,31 @@ defmodule Credence.Rule.NoExplicitMaxReduce do
       end)
 
     Enum.reverse(issues)
+  end
+
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Sourceror.parse_string!()
+    |> Macro.postwalk(fn
+      {{:., _, _}, _, args} = node ->
+        if reduce_call?(node) and max_reduce_body?(args) do
+          [enum | _] = args
+          enum_max_call(enum)
+        else
+          node
+        end
+
+      node ->
+        node
+    end)
+    |> Sourceror.to_string()
+  end
+
+  # ── Fix helpers ────────────────────────────────────────────────────
+
+  defp enum_max_call(enum) do
+    {{:., [], [{:__aliases__, [], [:Enum]}, :max]}, [], [enum]}
   end
 
   # ----------------------------

@@ -1036,7 +1036,7 @@ defmodule CredenceTest do
       input = """
       defmodule Foo do
         @doc false
-        defp x, do: 1
+        defp x(y), do: 1 + y
       end
       """
 
@@ -1050,8 +1050,8 @@ defmodule CredenceTest do
 
       # @doc false is fixed
       refute result.code =~ "@doc false"
-      # But the bad name `x` still shows up as an issue
-      assert Enum.any?(result.issues, &(&1.rule == :no_non_descriptive_names))
+      # But the bad name `y` still shows up as an issue
+      assert Enum.any?(result.issues, &(&1.rule == :descriptive_names))
     end
   end
 end
