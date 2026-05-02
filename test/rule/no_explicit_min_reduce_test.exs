@@ -7,7 +7,15 @@ defmodule Credence.Rule.NoExplicitMinReduceTest do
     Credence.Rule.NoExplicitMinReduce.check(ast, [])
   end
 
-  describe "NoExplicitminReduce" do
+  defp fix(code), do: Credence.Rule.NoExplicitMinReduce.fix(code, [])
+
+  describe "fixable?" do
+    test "reports as fixable" do
+      assert Credence.Rule.NoExplicitMinReduce.fixable?() == true
+    end
+  end
+
+  describe "NoExplicitMinReduce" do
     test "passes code that uses Enum.min/1 instead of reduce" do
       code = """
       defmodule Goodmin do
@@ -160,6 +168,67 @@ defmodule Credence.Rule.NoExplicitMinReduceTest do
       """
 
       assert check(code) == []
+    end
+  end
+
+  describe "fix" do
+    test "replaces min/2 reduce with Enum.min/1" do
+      code = """
+      Enum.reduce(list, :infinity, fn x, acc -> min(x, acc) end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.min(list)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "replaces if < reduce with Enum.min/1" do
+      code = """
+      Enum.reduce(list, :infinity, fn x, acc ->
+        if x < acc do x else acc end
+      end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.min(list)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "does not modify non-min reductions" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc -> acc + x end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reduce"
+      refute result =~ "Enum.min"
+    end
+
+    test "fixes multiple min reduces in one pass" do
+      code = """
+      defmodule M do
+        def run(a, b) do
+          x = Enum.reduce(a, :infinity, fn v, acc -> min(v, acc) end)
+          y = Enum.reduce(b, :infinity, fn v, acc -> min(v, acc) end)
+          {x, y}
+        end
+      end
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.min(a)"
+      assert result =~ "Enum.min(b)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "round-trip: fixed code produces no issues" do
+      code = """
+      Enum.reduce(list, :infinity, fn x, acc -> min(x, acc) end)
+      """
+
+      fixed = fix(code)
+      {:ok, ast} = Code.string_to_quoted(fixed)
+      assert Credence.Rule.NoExplicitMinReduce.check(ast, []) == []
     end
   end
 end

@@ -22,7 +22,7 @@ defmodule Credence.Rule.PreferEnumSlice do
 
       Enum.slice(list, 5, 10)
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

@@ -36,10 +36,6 @@ defmodule Credence.Rule.InconsistentParamNames do
   @impl true
   def fixable?, do: true
 
-  # ════════════════════════════════════════════════════════════════════
-  # check/2
-  # ════════════════════════════════════════════════════════════════════
-
   @impl true
   def check(ast, _opts) do
     clauses = collect_clauses(ast)
@@ -102,10 +98,6 @@ defmodule Credence.Rule.InconsistentParamNames do
     end)
   end
 
-  # ════════════════════════════════════════════════════════════════════
-  # fix/2
-  # ════════════════════════════════════════════════════════════════════
-
   @impl true
   def fix(source, _opts) do
     source
@@ -119,8 +111,6 @@ defmodule Credence.Rule.InconsistentParamNames do
     end)
     |> Sourceror.to_string()
   end
-
-  # ── Grouping consecutive clauses ───────────────────────────────────
 
   defp fix_block_stmts(stmts) do
     stmts
@@ -168,8 +158,6 @@ defmodule Credence.Rule.InconsistentParamNames do
   end
 
   defp extract_fn_key(_), do: nil
-
-  # ── Fixing a group of clauses ──────────────────────────────────────
 
   defp fix_clause_group([first | rest]) do
     canonical = canonical_base_names(first)

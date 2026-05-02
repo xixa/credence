@@ -24,7 +24,7 @@ defmodule Credence.Rule.NoParamRebinding do
         {new_count, new_q}
       end)
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

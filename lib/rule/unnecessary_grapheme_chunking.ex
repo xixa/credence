@@ -71,7 +71,7 @@ defmodule Credence.Rule.UnnecessaryGraphemeChunking do
   - Cases where grapheme correctness is explicitly required and simplicity is preferred
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @string_to_list [:graphemes, :codepoints]

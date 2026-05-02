@@ -257,10 +257,6 @@ defmodule Credence.Rule.NoDestructureReconstructTest do
     end
   end
 
-  # ══════════════════════════════════════════════════════════════════
-  # fix/2
-  # ══════════════════════════════════════════════════════════════════
-
   describe "fix/2 — case branches" do
     test "replaces reconstructed list with binding variable" do
       code = """

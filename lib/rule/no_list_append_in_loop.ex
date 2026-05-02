@@ -28,7 +28,7 @@ defmodule Credence.Rule.NoListAppendInLoop do
       end)
       |> Enum.reverse()
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

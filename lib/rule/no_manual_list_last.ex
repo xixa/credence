@@ -27,7 +27,7 @@ defmodule Credence.Rule.NoManualListLast do
   2. The other clause matches `[_ | rest]` and recurses with `rest`
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

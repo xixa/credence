@@ -1,5 +1,5 @@
 defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @enum_funcs [

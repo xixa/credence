@@ -153,10 +153,6 @@ defmodule Credence.Rule.NoEagerWithIndexInReduceTest do
     end
   end
 
-  # ══════════════════════════════════════════════════════════════════
-  # fix/2 — :stream strategy (default)
-  # ══════════════════════════════════════════════════════════════════
-
   describe "fix/2 :stream strategy" do
     test "fixes direct form: Enum.with_index → Stream.with_index" do
       code = """
@@ -236,10 +232,6 @@ defmodule Credence.Rule.NoEagerWithIndexInReduceTest do
       assert [] == Credence.Rule.NoEagerWithIndexInReduce.check(ast, [])
     end
   end
-
-  # ══════════════════════════════════════════════════════════════════
-  # fix/2 — :reduce strategy
-  # ══════════════════════════════════════════════════════════════════
 
   describe "fix/2 :reduce strategy — direct form" do
     test "transforms direct form into accumulator-tracked index" do
@@ -400,10 +392,6 @@ defmodule Credence.Rule.NoEagerWithIndexInReduceTest do
       assert [] == Credence.Rule.NoEagerWithIndexInReduce.check(ast, [])
     end
   end
-
-  # ══════════════════════════════════════════════════════════════════
-  # fix/2 — strategy selection
-  # ══════════════════════════════════════════════════════════════════
 
   describe "fix/2 strategy selection" do
     test "defaults to :stream when no option given" do

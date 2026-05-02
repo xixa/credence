@@ -268,10 +268,6 @@ defmodule Credence.Rule.InconsistentParamNamesTest do
     end
   end
 
-  # ══════════════════════════════════════════════════════════════════
-  # fix/2
-  # ══════════════════════════════════════════════════════════════════
-
   describe "fix/2 — basic renaming" do
     test "renames second clause params to match first clause" do
       code = """

@@ -7,6 +7,14 @@ defmodule Credence.Rule.NoManualFrequenciesTest do
     Credence.Rule.NoManualFrequencies.check(ast, [])
   end
 
+  defp fix(code), do: Credence.Rule.NoManualFrequencies.fix(code, [])
+
+  describe "fixable?" do
+    test "reports as fixable" do
+      assert Credence.Rule.NoManualFrequencies.fixable?() == true
+    end
+  end
+
   describe "NoManualFrequencies" do
     test "passes code using Enum.frequencies/1" do
       code = """
@@ -121,6 +129,75 @@ defmodule Credence.Rule.NoManualFrequenciesTest do
       issues = check(code)
 
       assert length(issues) == 1
+    end
+  end
+
+  describe "fix" do
+    test "replaces direct reduce with Enum.frequencies/1" do
+      code = """
+      Enum.reduce(list, %{}, fn item, counts ->
+        Map.update(counts, item, 1, &(&1 + 1))
+      end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.frequencies(list)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "replaces piped reduce with Enum.frequencies/1" do
+      code = """
+      list |> Enum.reduce(%{}, fn item, counts ->
+        Map.update(counts, item, 1, &(&1 + 1))
+      end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.frequencies(list)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "does not modify non-frequency reductions" do
+      code = """
+      Enum.reduce(list, %{}, fn item, acc ->
+        Map.put(acc, item, true)
+      end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reduce"
+      refute result =~ "Enum.frequencies"
+    end
+
+    test "preserves surrounding code" do
+      code = """
+      defmodule M do
+        def count(list) do
+          total = length(list)
+          freqs = Enum.reduce(list, %{}, fn item, acc ->
+            Map.update(acc, item, 1, &(&1 + 1))
+          end)
+          {total, freqs}
+        end
+      end
+      """
+
+      result = fix(code)
+      assert result =~ "length(list)"
+      assert result =~ "Enum.frequencies(list)"
+      assert result =~ "{total, freqs}"
+    end
+
+    test "round-trip: fixed code produces no issues" do
+      code = """
+      Enum.reduce(list, %{}, fn item, counts ->
+        Map.update(counts, item, 1, &(&1 + 1))
+      end)
+      """
+
+      fixed = fix(code)
+      {:ok, ast} = Code.string_to_quoted(fixed)
+      assert Credence.Rule.NoManualFrequencies.check(ast, []) == []
     end
   end
 end

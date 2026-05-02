@@ -17,7 +17,7 @@ defmodule Credence.Rule.NoGuardEqualityForPatternMatch do
       defp do_count(2, _a, b), do: b
       def process(:stop), do: :halted
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

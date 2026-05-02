@@ -18,7 +18,7 @@ defmodule Credence.Rule.NoSortThenAt do
       Enum.max(nums)                       # for the largest
       Enum.sort(nums) |> Enum.take(k)      # when you need the top-k list
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

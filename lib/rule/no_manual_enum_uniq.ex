@@ -7,7 +7,7 @@ defmodule Credence.Rule.NoManualEnumUniq do
   or `Enum.uniq_by/2`, which are implemented natively.
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true
@@ -29,10 +29,6 @@ defmodule Credence.Rule.NoManualEnumUniq do
 
     Enum.reverse(issues)
   end
-
-  # ------------------------------------------------------------
-  # PATTERN MATCHING LOGIC
-  # ------------------------------------------------------------
 
   defp manual_uniq?(init_acc, fun) do
     # 1. Find which index (0 or 1) in the tuple contains the MapSet.new()
@@ -123,10 +119,6 @@ defmodule Credence.Rule.NoManualEnumUniq do
         false
     end
   end
-
-  # ------------------------------------------------------------
-  # ISSUE DATA
-  # ------------------------------------------------------------
 
   defp trigger_issue(meta) do
     %Issue{

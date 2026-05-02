@@ -29,7 +29,7 @@ defmodule Credence.Rule.NoUnderscoreFunctionName do
   `__using__/1`, `__before_compile__/1`, and `__info__/1`.
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

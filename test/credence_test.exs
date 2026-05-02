@@ -1022,7 +1022,7 @@ defmodule CredenceTest do
       input = """
       defmodule Foo do
         @doc false
-        defp helper(x), do: x + 1
+        defp helper(bar), do: bar + 1
       end
       """
 

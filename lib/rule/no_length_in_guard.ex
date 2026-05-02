@@ -31,7 +31,7 @@ defmodule Credence.Rule.NoLengthInGuard do
   For bounds checks, moving the validation into the function body avoids
   redundant traversals when the guard fails and another clause is tried.
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

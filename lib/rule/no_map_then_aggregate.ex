@@ -36,7 +36,7 @@ defmodule Credence.Rule.NoMapThenAggregate do
   Both pipeline and direct-call nesting forms are detected.
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @aggregators [:max, :min, :sum]

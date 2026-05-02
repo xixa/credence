@@ -34,7 +34,7 @@ defmodule Credence.Rule.NoManualMin do
   | `if b >= a, do: a, else: b`     | `min(a, b)`    |
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

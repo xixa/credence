@@ -25,7 +25,7 @@ defmodule Credence.Rule.NoRedundantNegatedGuard do
   `when a == b` or `when a === b` (same variables, same positions).
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @equality_ops [:==, :===]

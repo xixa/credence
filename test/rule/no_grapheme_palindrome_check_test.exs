@@ -7,6 +7,14 @@ defmodule Credence.Rule.NoGraphemePalindromeCheckTest do
     Credence.Rule.NoGraphemePalindromeCheck.check(ast, [])
   end
 
+  defp fix(code), do: Credence.Rule.NoGraphemePalindromeCheck.fix(code, [])
+
+  describe "fixable?" do
+    test "reports as fixable" do
+      assert Credence.Rule.NoGraphemePalindromeCheck.fixable?() == true
+    end
+  end
+
   describe "NoGraphemePalindromeCheck" do
     test "passes code that compares strings directly with String.reverse" do
       code = """
@@ -103,6 +111,98 @@ defmodule Credence.Rule.NoGraphemePalindromeCheckTest do
       """
 
       assert check(code) == []
+    end
+  end
+
+  describe "fix" do
+    test "strips direct String.graphemes and replaces Enum.reverse with String.reverse" do
+      code = """
+      graphemes = String.graphemes(s)
+      graphemes == Enum.reverse(graphemes)
+      """
+
+      result = fix(code)
+      refute result =~ "String.graphemes"
+      assert result =~ "String.reverse"
+      refute result =~ "Enum.reverse"
+    end
+
+    test "strips direct String.to_charlist" do
+      code = """
+      chars = String.to_charlist(s)
+      chars == Enum.reverse(chars)
+      """
+
+      result = fix(code)
+      refute result =~ "String.to_charlist"
+      assert result =~ "String.reverse"
+    end
+
+    test "strips terminal pipe stage for piped decomposition" do
+      code = """
+      normalized = s |> String.downcase() |> String.graphemes()
+      normalized == Enum.reverse(normalized)
+      """
+
+      result = fix(code)
+      assert result =~ "String.downcase"
+      refute result =~ "String.graphemes"
+      assert result =~ "String.reverse"
+    end
+
+    test "handles reversed comparison order" do
+      code = """
+      graphemes = String.graphemes(s)
+      Enum.reverse(graphemes) == graphemes
+      """
+
+      result = fix(code)
+      refute result =~ "String.graphemes"
+      assert result =~ "String.reverse"
+      refute result =~ "Enum.reverse"
+    end
+
+    test "does not modify unrelated code" do
+      code = """
+      list = [1, 2, 3]
+      list == Enum.reverse(list)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reverse"
+      refute result =~ "String.reverse"
+    end
+
+    test "preserves surrounding code" do
+      code = """
+      defmodule M do
+        def palindrome?(s) do
+          cleaned = s |> String.downcase() |> String.graphemes()
+          cleaned == Enum.reverse(cleaned)
+        end
+      end
+      """
+
+      result = fix(code)
+      assert result =~ "String.downcase"
+      assert result =~ "String.reverse"
+      assert result =~ "def palindrome?"
+      refute result =~ "String.graphemes"
+    end
+
+    test "round-trip: fixed code produces no issues" do
+      code = """
+      defmodule M do
+        def palindrome?(s) do
+          graphemes = String.graphemes(s)
+          graphemes == Enum.reverse(graphemes)
+        end
+      end
+      """
+
+      fixed = fix(code)
+      {:ok, ast} = Code.string_to_quoted(fixed)
+      assert Credence.Rule.NoGraphemePalindromeCheck.check(ast, []) == []
     end
   end
 end

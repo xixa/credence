@@ -16,7 +16,7 @@ defmodule Credence.Rule.NoRedundantEnumJoinSeparator do
       graphemes |> Enum.join()
       Enum.join(list)
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

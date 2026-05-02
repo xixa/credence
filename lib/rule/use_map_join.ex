@@ -30,7 +30,7 @@ defmodule Credence.Rule.UseMapJoin do
   `Enum.map(f) |> Enum.filter(g) |> Enum.join()` are left alone.
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

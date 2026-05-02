@@ -67,7 +67,7 @@ Every rule implements `Credence.Rule`:
 
 ```elixir
 defmodule Credence.Rule.MyRule do
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

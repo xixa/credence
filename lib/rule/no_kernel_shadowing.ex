@@ -12,7 +12,8 @@ defmodule Credence.Rule.NoKernelShadowing do
     - `max_val`, `global_max`, or `limit` instead of `max`
     - `min_val`, `local_min`, or `bottom` instead of `min`
   """
-  @behaviour Credence.Rule
+
+  use Credence.Rule
   alias Credence.Issue
 
   @shadowed [

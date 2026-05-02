@@ -31,7 +31,8 @@ defmodule Credence.Rule.NoListLast do
           {row, List.last(row)}  # or track running total differently
         end)
   """
-  @behaviour Credence.Rule
+
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

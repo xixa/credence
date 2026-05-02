@@ -17,7 +17,7 @@ defmodule Credence.Rule.NoMapKeysOrValuesForIteration do
       Enum.all?(degrees, fn {_k, v} -> v == 0 end)
       Enum.map(map, fn {k, _v} -> to_string(k) end)
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @map_funcs [:keys, :values]

@@ -20,7 +20,7 @@ defmodule Credence.Rule.NoMapUpdateThenFetch do
       map = Map.put(map, key, count)
       # `count` is already available — no second lookup needed
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

@@ -27,7 +27,7 @@ defmodule Credence.Rule.NoMultipleEnumAt do
       [min1, min2 | _] = Enum.sort(nums)
       [max1, max2 | _] = Enum.sort(nums, :desc)
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @min_calls_to_flag 3

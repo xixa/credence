@@ -20,13 +20,16 @@ defmodule Credence.Rule.NoListFold do
   | Pattern              | Suggested replacement   |
   | -------------------- | ----------------------- |
   | `List.foldl/3`       | `Enum.reduce/3`         |
-  | `List.foldr/3`       | `Enum.reduce/3` (with note about reversal) |
+  | `List.foldr/3`       | `Enum.reduce/3` (with `Enum.reverse/1`) |
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @flagged_fns [:foldl, :foldr]
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
@@ -50,14 +53,70 @@ defmodule Credence.Rule.NoListFold do
     Enum.reverse(issues)
   end
 
-  # ------------------------------------------------------------
-  # DETECTION
-  #
-  # Matches fully-qualified calls: List.foldl(...) / List.foldr(...)
-  # in the AST form produced by Code.string_to_quoted/1.
-  # ------------------------------------------------------------
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Sourceror.parse_string!()
+    |> Macro.postwalk(fn
+      # Piped: source |> List.foldl(acc, fun) / List.foldr(acc, fun)
+      {:|>, pipe_meta,
+       [source, {{:., _, [mod, fn_name]}, call_meta, args}]} = node
+      when fn_name in @flagged_fns and is_list(args) ->
+        if list_module?(mod) do
+          fix_piped_fold(fn_name, source, call_meta, args, pipe_meta)
+        else
+          node
+        end
 
-  # Dot-call form: List.foldl(list, acc, fun)
+      # Direct 3-arg: List.foldl(list, acc, fun) / List.foldr(list, acc, fun)
+      {{:., _, [mod, fn_name]}, meta, [_list, _acc, _fun] = args} = node
+      when fn_name in @flagged_fns ->
+        if list_module?(mod) do
+          fix_direct_fold(fn_name, args, meta)
+        else
+          node
+        end
+
+      node ->
+        node
+    end)
+    |> Sourceror.to_string()
+  end
+
+  # ── Fix helpers ────────────────────────────────────────────────────
+
+  # foldl piped: source |> List.foldl(acc, fun) → source |> Enum.reduce(acc, fun)
+  defp fix_piped_fold(:foldl, source, _call_meta, args, pipe_meta) do
+    {:|>, pipe_meta, [source, enum_reduce_call(args)]}
+  end
+
+  # foldr piped: source |> List.foldr(acc, fun) → source |> Enum.reverse() |> Enum.reduce(acc, fun)
+  defp fix_piped_fold(:foldr, source, _call_meta, args, pipe_meta) do
+    reversed = {:|>, [], [source, enum_reverse_call()]}
+    {:|>, pipe_meta, [reversed, enum_reduce_call(args)]}
+  end
+
+  # foldl direct: List.foldl(list, acc, fun) → Enum.reduce(list, acc, fun)
+  defp fix_direct_fold(:foldl, args, _meta) do
+    enum_reduce_call(args)
+  end
+
+  # foldr direct: List.foldr(list, acc, fun) → Enum.reduce(Enum.reverse(list), acc, fun)
+  defp fix_direct_fold(:foldr, [list | rest_args], _meta) do
+    reversed_list = {{:., [], [{:__aliases__, [], [:Enum]}, :reverse]}, [], [list]}
+    enum_reduce_call([reversed_list | rest_args])
+  end
+
+  defp enum_reduce_call(args) do
+    {{:., [], [{:__aliases__, [], [:Enum]}, :reduce]}, [], args}
+  end
+
+  defp enum_reverse_call do
+    {{:., [], [{:__aliases__, [], [:Enum]}, :reverse]}, [], []}
+  end
+
+  # ── Shared detection ───────────────────────────────────────────────
+
   defp extract_list_fold({{:., meta, [mod, fn_name]}, _, args})
        when fn_name in @flagged_fns and is_list(args) do
     if list_module?(mod), do: {:ok, fn_name, meta}, else: :error
@@ -65,9 +124,8 @@ defmodule Credence.Rule.NoListFold do
 
   defp extract_list_fold(_), do: :error
 
-  # ------------------------------------------------------------
-  # MESSAGE GENERATION
-  # ------------------------------------------------------------
+  defp list_module?({:__aliases__, _, [:List]}), do: true
+  defp list_module?(_), do: false
 
   defp build_message(:foldl) do
     """
@@ -90,11 +148,4 @@ defmodule Credence.Rule.NoListFold do
         list |> Enum.reverse() |> Enum.reduce(acc, fun)
     """
   end
-
-  # ------------------------------------------------------------
-  # HELPERS
-  # ------------------------------------------------------------
-
-  defp list_module?({:__aliases__, _, [:List]}), do: true
-  defp list_module?(_), do: false
 end

@@ -19,7 +19,7 @@ defmodule Credence.Rule.RedundantListGuard do
   | `def f([_ \\| a], [_ \\| b]) when is_list(a) and …` | Remove each redundant `is_list` call  |
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

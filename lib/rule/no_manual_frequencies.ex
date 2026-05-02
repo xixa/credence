@@ -17,14 +17,18 @@ defmodule Credence.Rule.NoManualFrequencies do
 
       Enum.frequencies(list)
   """
-  @behaviour Credence.Rule
+
+  use Credence.Rule
   alias Credence.Issue
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Enum.reduce(list, %{}, fn ... -> Map.update(...) end)
+        # Direct: Enum.reduce(list, %{}, fn ... -> Map.update(...) end)
         {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, meta, [_list, {:%{}, _, []}, body]} =
             node,
         issues ->
@@ -54,17 +58,58 @@ defmodule Credence.Rule.NoManualFrequencies do
     Enum.reverse(issues)
   end
 
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Sourceror.parse_string!()
+    |> Macro.postwalk(fn
+      # Piped: list |> Enum.reduce(%{}, fn ... end) → Enum.frequencies(list)
+      {:|>, _,
+       [
+         list,
+         {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, [{:%{}, _, []}, body]}
+       ]} = node ->
+        if body_has_map_update?(body) do
+          enum_frequencies_call(list)
+        else
+          node
+        end
+
+      # Direct: Enum.reduce(list, %{}, fn ... end) → Enum.frequencies(list)
+      {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, [list, {:%{}, _, []}, body]} = node ->
+        if body_has_map_update?(body) do
+          enum_frequencies_call(list)
+        else
+          node
+        end
+
+      node ->
+        node
+    end)
+    |> Sourceror.to_string()
+  end
+
+  # ── Fix helpers ────────────────────────────────────────────────────
+
+  defp enum_frequencies_call(enum) do
+    {{:., [], [{:__aliases__, [], [:Enum]}, :frequencies]}, [], [enum]}
+  end
+
+  # ── Shared detection ───────────────────────────────────────────────
+
+  # Sourceror wraps literals in {:__block__, _, [value]}
+  defp unwrap_literal({:__block__, _, [val]}), do: val
+  defp unwrap_literal(val), do: val
+
   defp body_has_map_update?(body) do
     {_ast, found} =
       Macro.prewalk(body, false, fn
         # Map.update(acc, key, 1, increment_fn) — the `1` default is the
-        # hallmark of frequency counting. Group-by patterns use a list
-        # like [item] as the default, which we must not flag.
-        {{:., _, [{:__aliases__, _, [:Map]}, :update]}, _, [_, _, 1, _]} = node, _ ->
-          {node, true}
+        # hallmark of frequency counting.
+        {{:., _, [{:__aliases__, _, [:Map]}, :update]}, _, [_, _, default, _]} = node, _ ->
+          if unwrap_literal(default) == 1, do: {node, true}, else: {node, false}
 
-        # Map.update!(acc, key, increment_fn) — only used on pre-seeded maps,
-        # still a frequency pattern when inside reduce with %{}
+        # Map.update!(acc, key, increment_fn)
         {{:., _, [{:__aliases__, _, [:Map]}, :update!]}, _, [_, _, _]} = node, _ ->
           {node, true}
 

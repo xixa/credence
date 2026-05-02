@@ -19,7 +19,7 @@ defmodule Credence.Rule.NoSortForTopK do
   clearer in intent.
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

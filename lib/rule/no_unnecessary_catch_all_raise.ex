@@ -39,7 +39,7 @@ defmodule Credence.Rule.NoUnnecessaryCatchAllRaise do
   - Clauses with guard expressions
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

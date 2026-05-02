@@ -26,7 +26,7 @@ defmodule Credence.Rule.NoStringLengthForCharCheck do
         ...
       end
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

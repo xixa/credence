@@ -18,7 +18,7 @@ defmodule Credence.Rule.NoSortThenReverse do
 
       sorted_desc = Enum.sort(nums, :desc)
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

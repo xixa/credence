@@ -47,10 +47,6 @@ defmodule Credence.Rule.NoEagerWithIndexInReduce do
   @impl true
   def fixable?, do: true
 
-  # ════════════════════════════════════════════════════════════════════
-  # check/2
-  # ════════════════════════════════════════════════════════════════════
-
   @impl true
   def check(ast, _opts) do
     {_ast, issues} =
@@ -82,10 +78,6 @@ defmodule Credence.Rule.NoEagerWithIndexInReduce do
 
     Enum.reverse(issues)
   end
-
-  # ════════════════════════════════════════════════════════════════════
-  # fix/2
-  # ════════════════════════════════════════════════════════════════════
 
   @impl true
   def fix(source, opts) do

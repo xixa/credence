@@ -45,10 +45,6 @@ defmodule Credence.Rule.NoDestructureReconstruct do
   @impl true
   def fixable?, do: true
 
-  # ════════════════════════════════════════════════════════════════════
-  # check/2
-  # ════════════════════════════════════════════════════════════════════
-
   @impl true
   def check(ast, _opts) do
     {_ast, issues} =
@@ -102,10 +98,6 @@ defmodule Credence.Rule.NoDestructureReconstruct do
         []
     end
   end
-
-  # ════════════════════════════════════════════════════════════════════
-  # fix/2
-  # ════════════════════════════════════════════════════════════════════
 
   @impl true
   def fix(source, _opts) do
@@ -221,10 +213,6 @@ defmodule Credence.Rule.NoDestructureReconstruct do
 
     names
   end
-
-  # ════════════════════════════════════════════════════════════════════
-  # Shared helpers
-  # ════════════════════════════════════════════════════════════════════
 
   defp extract_var_names(elements) when is_list(elements) do
     names =

@@ -36,7 +36,7 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
   are **not** flagged.
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @flagged_enum_fns [:all?, :any?, :each, :map, :filter, :reject, :flat_map]

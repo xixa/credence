@@ -1,7 +1,11 @@
 defmodule Credence.Rule.NoExplicitMinReduce do
   @moduledoc "Flags explicit min-reduction patterns inside Enum.reduce/3."
-  @behaviour Credence.Rule
+
+  use Credence.Rule
   alias Credence.Issue
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
@@ -26,6 +30,33 @@ defmodule Credence.Rule.NoExplicitMinReduce do
 
     Enum.reverse(issues)
   end
+
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Sourceror.parse_string!()
+    |> Macro.postwalk(fn
+      {{:., _, _}, _, args} = node ->
+        if reduce_call?(node) and min_reduce_body?(args) do
+          [enum | _] = args
+          enum_min_call(enum)
+        else
+          node
+        end
+
+      node ->
+        node
+    end)
+    |> Sourceror.to_string()
+  end
+
+  # ── Fix helpers ────────────────────────────────────────────────────
+
+  defp enum_min_call(enum) do
+    {{:., [], [{:__aliases__, [], [:Enum]}, :min]}, [], [enum]}
+  end
+
+  # ── Shared detection ───────────────────────────────────────────────
 
   defp reduce_call?({{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, _}), do: true
   defp reduce_call?({{:., _, [:Enum, :reduce]}, _, _}), do: true

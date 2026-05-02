@@ -6,7 +6,7 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTake do
   This is about readability and intent clarity, not performance.
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

@@ -6,6 +6,14 @@ defmodule Credence.Rule.NoListFoldTest do
     Credence.Rule.NoListFold.check(ast, [])
   end
 
+  defp fix(code), do: Credence.Rule.NoListFold.fix(code, [])
+
+  describe "fixable?" do
+    test "reports as fixable" do
+      assert Credence.Rule.NoListFold.fixable?() == true
+    end
+  end
+
   describe "NoListFold" do
     test "detects List.foldl/3" do
       code = """
@@ -138,6 +146,131 @@ defmodule Credence.Rule.NoListFoldTest do
       """
 
       assert check(code) == []
+    end
+  end
+
+  describe "check" do
+    test "detects List.foldl" do
+      code = """
+      List.foldl(list, 0, fn x, acc -> acc + x end)
+      """
+
+      issues = check(code)
+      assert length(issues) == 1
+      assert hd(issues).rule == :no_list_fold
+      assert hd(issues).message =~ "foldl"
+    end
+
+    test "detects List.foldr" do
+      code = """
+      List.foldr(list, [], fn x, acc -> [x | acc] end)
+      """
+
+      issues = check(code)
+      assert length(issues) == 1
+      assert hd(issues).message =~ "foldr"
+    end
+
+    test "does not flag Enum.reduce" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc -> acc + x end)
+      """
+
+      assert check(code) == []
+    end
+  end
+
+  describe "fix foldl" do
+    test "replaces direct List.foldl with Enum.reduce" do
+      code = """
+      List.foldl(list, 0, fn x, acc -> acc + x end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reduce"
+      refute result =~ "List.foldl"
+    end
+
+    test "replaces piped List.foldl with Enum.reduce" do
+      code = """
+      list |> List.foldl(0, fn x, acc -> acc + x end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reduce"
+      refute result =~ "List.foldl"
+    end
+  end
+
+  describe "fix foldr" do
+    test "replaces direct List.foldr with Enum.reverse + Enum.reduce" do
+      code = """
+      List.foldr(list, [], fn x, acc -> [x | acc] end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reverse"
+      assert result =~ "Enum.reduce"
+      refute result =~ "List.foldr"
+    end
+
+    test "replaces piped List.foldr with Enum.reverse + Enum.reduce" do
+      code = """
+      list |> List.foldr([], fn x, acc -> [x | acc] end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reverse"
+      assert result =~ "Enum.reduce"
+      refute result =~ "List.foldr"
+    end
+  end
+
+  describe "fix preserves" do
+    test "does not modify Enum.reduce" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc -> acc + x end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reduce"
+    end
+
+    test "preserves surrounding code" do
+      code = """
+      defmodule M do
+        def run(list) do
+          sum = List.foldl(list, 0, fn x, acc -> acc + x end)
+          sum * 2
+        end
+      end
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reduce"
+      assert result =~ "sum * 2"
+    end
+  end
+
+  describe "fix round-trip" do
+    test "fixed foldl produces no issues" do
+      code = """
+      List.foldl(list, 0, fn x, acc -> acc + x end)
+      """
+
+      fixed = fix(code)
+      {:ok, ast} = Code.string_to_quoted(fixed)
+      assert Credence.Rule.NoListFold.check(ast, []) == []
+    end
+
+    test "fixed foldr produces no issues" do
+      code = """
+      List.foldr(list, [], fn x, acc -> [x | acc] end)
+      """
+
+      fixed = fix(code)
+      {:ok, ast} = Code.string_to_quoted(fixed)
+      assert Credence.Rule.NoListFold.check(ast, []) == []
     end
   end
 end

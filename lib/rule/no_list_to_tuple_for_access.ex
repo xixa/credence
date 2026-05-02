@@ -23,7 +23,8 @@ defmodule Credence.Rule.NoListToTupleForAccess do
       # Or for indexed access on strings:
       <<first::utf8, _rest::binary>> = string
   """
-  @behaviour Credence.Rule
+
+  use Credence.Rule
   alias Credence.Issue
 
   @impl true

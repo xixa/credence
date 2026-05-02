@@ -23,6 +23,7 @@ defmodule Credence.Rule.NoAnonFnApplicationInPipe do
       # Or with capture syntax:
       |> then(&[1 | &1])
   """
+
   use Credence.Rule
   alias Credence.Issue
 

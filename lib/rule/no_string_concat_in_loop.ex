@@ -29,7 +29,7 @@ defmodule Credence.Rule.NoStringConcatInLoop do
       # Or simply:
       Enum.join(graphemes)
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
 
   @enum_loops [:reduce, :reduce_while]
