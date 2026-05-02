@@ -63,23 +63,13 @@ defmodule Credence.Rule.NoExplicitMaxReduce do
     |> Sourceror.to_string()
   end
 
-  # ── Fix helpers ────────────────────────────────────────────────────
-
   defp enum_max_call(enum) do
     {{:., [], [{:__aliases__, [], [:Enum]}, :max]}, [], [enum]}
   end
 
-  # ----------------------------
-  # Detect Enum.reduce safely
-  # ----------------------------
-
   defp reduce_call?({{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, _}), do: true
   defp reduce_call?({{:., _, [:Enum, :reduce]}, _, _}), do: true
   defp reduce_call?(_), do: false
-
-  # ----------------------------
-  # Extract fn body safely
-  # ----------------------------
 
   defp max_reduce_body?([
          _enum,
@@ -90,10 +80,6 @@ defmodule Credence.Rule.NoExplicitMaxReduce do
   end
 
   defp max_reduce_body?(_), do: false
-
-  # ----------------------------
-  # STRICT max detection only
-  # ----------------------------
 
   # Safely unwrap single-expression blocks (added by formatter/parser occasionally)
   defp explicit_max?({:__block__, _, [body]}), do: explicit_max?(body)
