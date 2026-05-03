@@ -113,8 +113,6 @@ defmodule Credence.Rule.NoMapThenAggregate do
     end)
   end
 
-  defp fix_pipeline(_), do: nil
-
   defp build_reduce(source, map_fn, agg_fn) do
     {body_fn, needs_initial} =
       case agg_fn do

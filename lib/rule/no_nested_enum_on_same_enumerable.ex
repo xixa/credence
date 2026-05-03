@@ -99,9 +99,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
       %Sourceror.Range{start: start_kw, end: end_kw} ->
         {:ok, start_kw, end_kw}
 
-      {start_pos, end_pos} when is_tuple(start_pos) and is_tuple(end_pos) ->
-        {:ok, Tuple.to_list(start_pos), Tuple.to_list(end_pos)}
-
       _other ->
         compute_range_from_metadata(node, source)
     end
