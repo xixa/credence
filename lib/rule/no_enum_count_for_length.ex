@@ -71,8 +71,6 @@ defmodule Credence.Rule.NoEnumCountForLength do
     |> Sourceror.to_string()
   end
 
-  # ── Shared detection helpers ───────────────────────────────────────
-
   defp check_node({{:., meta, [mod, :count]}, _, [arg]}) do
     if enum_module?(mod) and not predicate?(arg) do
       {:ok, build_issue(meta)}

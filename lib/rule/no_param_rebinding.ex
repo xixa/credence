@@ -29,8 +29,6 @@ defmodule Credence.Rule.NoParamRebinding do
   @impl true
   def fixable?, do: true
 
-  # ── check/2 (unchanged) ─────────────────────────────────────────────
-
   @impl true
   def check(ast, _opts) do
     {_ast, issues} =
@@ -54,8 +52,6 @@ defmodule Credence.Rule.NoParamRebinding do
 
     Enum.reverse(issues)
   end
-
-  # ── fix/2 ───────────────────────────────────────────────────────────
 
   @impl true
   def fix(source, _opts) do
@@ -86,8 +82,6 @@ defmodule Credence.Rule.NoParamRebinding do
     end)
     |> Sourceror.to_string()
   end
-
-  # ── Fix helpers ──────────────────────────────────────────────────────
 
   defp fix_body(body, param_vars) do
     # Collect every variable name already present so we never generate a
@@ -178,7 +172,6 @@ defmodule Credence.Rule.NoParamRebinding do
     end
   end
 
-  # ── deep_rename ─────────────────────────────────────────────────────
   # Walks an AST and replaces every occurrence of a variable whose name
   # is a key in `renames` with the corresponding value.
   #
@@ -186,7 +179,6 @@ defmodule Credence.Rule.NoParamRebinding do
   # conflicts with that fn's own parameters, so the inner scope is not
   # corrupted.  References to the outer variable that are NOT shadowed
   # by the inner fn's parameters ARE still renamed.
-
   defp deep_rename(ast, renames) when map_size(renames) == 0, do: ast
   defp deep_rename(ast, renames), do: do_deep_rename(ast, renames)
 
@@ -247,8 +239,6 @@ defmodule Credence.Rule.NoParamRebinding do
 
     vars
   end
-
-  # ── Check helpers (unchanged) ────────────────────────────────────────
 
   defp extract_var_names(ast) do
     {_ast, vars} =

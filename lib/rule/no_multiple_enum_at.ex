@@ -87,8 +87,6 @@ defmodule Credence.Rule.NoMultipleEnumAt do
     end
   end
 
-  # ── Fix internals ────────────────────────────────────────────────────────
-
   # Use Macro.prewalk (same traversal the check function relies on) so we
   # visit every __block__ in the tree.  Children of a __block__ are visited
   # *after* we attempt a fix on the block, which is fine because the only
@@ -110,8 +108,6 @@ defmodule Credence.Rule.NoMultipleEnumAt do
     end)
   end
 
-  # ── Block-level fix ─────────────────────────────────────────────────────
-
   defp fix_block(children) do
     groups = find_contiguous_enum_at_groups(children)
     fixes = compute_fixes(groups)
@@ -121,8 +117,6 @@ defmodule Credence.Rule.NoMultipleEnumAt do
       _ -> {:changed, insert_fixes(children, fixes)}
     end
   end
-
-  # ── Collecting & grouping ────────────────────────────────────────────────
 
   defp find_contiguous_enum_at_groups(children) do
     {groups, current} =
@@ -160,8 +154,6 @@ defmodule Credence.Rule.NoMultipleEnumAt do
   defp normalize_index(idx) when is_integer(idx), do: {:ok, idx}
   defp normalize_index({:-, _, [n]}) when is_integer(n), do: {:ok, -n}
   defp normalize_index(_), do: :error
-
-  # ── Building fixes ───────────────────────────────────────────────────────
 
   defp compute_fixes(groups) do
     Enum.flat_map(groups, fn group ->
@@ -276,8 +268,6 @@ defmodule Credence.Rule.NoMultipleEnumAt do
     Code.string_to_quoted!(code)
   end
 
-  # ── Applying fixes to the block ──────────────────────────────────────────
-
   defp insert_fixes(children, fixes) do
     child_index = Map.new(Enum.with_index(children), fn {c, i} -> {c, i} end)
 
@@ -299,8 +289,6 @@ defmodule Credence.Rule.NoMultipleEnumAt do
       end
     end)
   end
-
-  # ── Utilities ────────────────────────────────────────────────────────────
 
   defp literal_index?(idx) when is_integer(idx), do: true
   defp literal_index?({:-, _, [n]}) when is_integer(n), do: true

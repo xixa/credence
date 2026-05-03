@@ -71,8 +71,6 @@ defmodule Credence.Rule.NoMapUpdateThenFetch do
     |> Sourceror.to_string()
   end
 
-  # ── AST transformation ──────────────────────────────────────────────
-
   defp transform_ast({:__block__, meta, statements}) do
     {:__block__, meta, transform_block(Enum.map(statements, &transform_ast/1))}
   end
@@ -149,8 +147,6 @@ defmodule Credence.Rule.NoMapUpdateThenFetch do
 
   defp extract_map_update(_), do: :error
 
-  # ── Find matching fetch call ─────────────────────────────────────────
-
   defp find_matching_fetch(%{var: var_name, key: expected_key}, rest) do
     scan_fetch(var_name, expected_key, rest, [])
   end
@@ -214,8 +210,6 @@ defmodule Credence.Rule.NoMapUpdateThenFetch do
        do: true
 
   defp do_keys_match?(_, _), do: false
-
-  # ── Build replacement AST ────────────────────────────────────────────
 
   # Map.update/4 → val = case Map.fetch(map, key) do ... end; map = Map.put(...)
   defp build_replacement(
@@ -292,8 +286,6 @@ defmodule Credence.Rule.NoMapUpdateThenFetch do
     end
   end
 
-  # ── AST builders ─────────────────────────────────────────────────────
-
   defp map_fetch_bang_call(map, key) do
     {{:., [], [{:__aliases__, [], [:Map]}, :fetch!]}, [], [map, key]}
   end
@@ -305,8 +297,6 @@ defmodule Credence.Rule.NoMapUpdateThenFetch do
   defp fun_call_ast(fun, arg) do
     {{:., [], [fun]}, [], [arg]}
   end
-
-  # ── Issue ────────────────────────────────────────────────────────────
 
   defp build_issue(var, fetch_func, meta) do
     %Issue{

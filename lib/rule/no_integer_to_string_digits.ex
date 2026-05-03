@@ -71,13 +71,9 @@ defmodule Credence.Rule.NoIntegerToStringDigits do
     |> Sourceror.to_string()
   end
 
-  # ── Fix helpers ────────────────────────────────────────────────────
-
   defp integer_digits_call(args) do
     {{:., [], [{:__aliases__, [], [:Integer]}, :digits]}, [], args}
   end
-
-  # ── Shared detection ───────────────────────────────────────────────
 
   # Nested: String.to_charlist(Integer.to_string(n, base))
   defp flagged?(

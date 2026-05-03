@@ -11,10 +11,6 @@ defmodule Credence.Rule.NoManualMinTest do
   end
 
   describe "NoManualMin" do
-    # ============================================================
-    # CHECK — Positive cases (should flag)
-    # ============================================================
-
     test "detects if a < b, do: a, else: b" do
       code = """
       defmodule Bad do
@@ -118,10 +114,6 @@ defmodule Credence.Rule.NoManualMinTest do
       assert length(issues) == 2
     end
 
-    # ============================================================
-    # CHECK — Negative cases (should NOT flag)
-    # ============================================================
-
     test "does not flag min/2 usage (already correct)" do
       code = """
       defmodule Good do
@@ -185,10 +177,6 @@ defmodule Credence.Rule.NoManualMinTest do
       """
       assert check(code) == []
     end
-
-    # ============================================================
-    # FIX — Positive cases (should transform)
-    # ============================================================
 
     test "fix: if a < b, do: a, else: b → min(a, b)" do
       code = """
@@ -316,10 +304,6 @@ defmodule Credence.Rule.NoManualMinTest do
       assert result =~ "min(a, b)"
       refute result =~ "if"
     end
-
-    # ============================================================
-    # FIX — Negative cases (should NOT modify)
-    # ============================================================
 
     test "fix: does not modify already correct code" do
       code = """

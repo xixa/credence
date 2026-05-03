@@ -474,8 +474,6 @@ defmodule Credence.Rule.NoMapKeysOrValuesForIteration do
     {:fn, fm, new}
   end
 
-  # ── head destructuring ─────────────────────────────────────────────
-
   defp destructure_head([{:when, wm, [pattern, guard]} | rest]) do
     [{:when, wm, [df(pattern), guard]} | rest]
   end
@@ -495,8 +493,6 @@ defmodule Credence.Rule.NoMapKeysOrValuesForIteration do
   end
 
   defp sorter_head(other, _mf), do: other
-
-  # ── core pattern transform ─────────────────────────────────────────
 
   defp df(pattern), do: {{:_k, [], nil}, pattern}
 

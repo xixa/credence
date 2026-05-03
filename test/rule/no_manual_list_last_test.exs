@@ -161,10 +161,6 @@ defmodule Credence.Rule.NoManualListLastTest do
     end
   end
 
-  # ==============================================================
-  # FIX TESTS
-  # ==============================================================
-
   describe "fix" do
     test "replaces hand-rolled function with List.last delegation" do
       code = """

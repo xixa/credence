@@ -70,14 +70,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
     |> Sourceror.to_string()
   end
 
-  # ================================================================
-  # FIX — node matching
-  # ================================================================
-
-  # ================================================================
-  # FIX — node matching
-  # ================================================================
-
   defp try_fix_node({:|>, _, _} = node) do
     steps = flatten_pipeline(node)
 
@@ -127,10 +119,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
   end
 
   defp try_fix_pipeline_three_step(_), do: :error
-
-  # ================================================================
-  # FIX — application helpers
-  # ================================================================
 
   # Map.keys(var) |> Enum.xxx(callback) [|> rest]
   defp apply_pipeline_fix(var_expr, var_name, fn_name, callback, rest) do
@@ -195,10 +183,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
       {:|>, [], [acc, step]}
     end)
   end
-
-  # ================================================================
-  # FIX — callback transformation
-  # ================================================================
 
   defp transform_callback(callback, var_name) do
     case extract_callback_param(callback) do
@@ -289,10 +273,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
     end)
   end
 
-  # ================================================================
-  # CHECK — node matching
-  # ================================================================
-
   # Pipeline form: Map.keys(var) |> Enum.xxx(fn ...)
   #            or: var |> Map.keys() |> Enum.xxx(fn ...)
   defp check_node({:|>, meta, _} = node) do
@@ -313,10 +293,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
   end
 
   defp check_node(_), do: :error
-
-  # ================================================================
-  # CHECK — pipeline analysis
-  # ================================================================
 
   defp check_pipeline(steps, meta) do
     case check_two_step(steps, meta) do
@@ -351,10 +327,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
   end
 
   defp check_three_step(_, _), do: :error
-
-  # ================================================================
-  # EXTRACTORS
-  # ================================================================
 
   # Map.keys(var) — full call with one argument (check: returns name only)
   defp extract_map_keys_var({{:., _, [mod, :keys]}, _, [arg]}) do
@@ -399,10 +371,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
 
   defp extract_simple_var(_), do: :error
 
-  # ================================================================
-  # CALLBACK BODY INSPECTION (check only)
-  # ================================================================
-
   defp references_map_var?(callback, target_var) do
     {_, found} =
       Macro.prewalk(callback, false, fn
@@ -426,10 +394,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
     found
   end
 
-  # ================================================================
-  # HELPERS
-  # ================================================================
-
   defp flatten_pipeline({:|>, _, [left, right]}) do
     flatten_pipeline(left) ++ [right]
   end
@@ -441,10 +405,6 @@ defmodule Credence.Rule.NoMapKeysEnumLookup do
 
   defp map_module?({:__aliases__, _, [:Map]}), do: true
   defp map_module?(_), do: false
-
-  # ================================================================
-  # MESSAGE GENERATION
-  # ================================================================
 
   defp build_issue(fn_name, var_name, meta) do
     %Issue{

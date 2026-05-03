@@ -59,8 +59,6 @@ defmodule Credence.Rule.NoEnumAtBinarySearch do
     |> Enum.flat_map(fn {_name, body} -> find_issues_in_body(body) end)
   end
 
-  # ── Function collection ────────────────────────────────────────────
-
   defp collect_function_defs(ast) do
     {_, fns} =
       Macro.prewalk(ast, [], fn
@@ -81,8 +79,6 @@ defmodule Credence.Rule.NoEnumAtBinarySearch do
 
     fns
   end
-
-  # ── Issue detection ────────────────────────────────────────────────
 
   defp find_issues_in_body(body) do
     {_, {issues, _mids}} =
@@ -114,8 +110,6 @@ defmodule Credence.Rule.NoEnumAtBinarySearch do
 
     Enum.reverse(issues)
   end
-
-  # ── Shared helpers ─────────────────────────────────────────────────
 
   defp extract_do_body(body_kw) when is_list(body_kw) do
     Enum.find_value(body_kw, fn

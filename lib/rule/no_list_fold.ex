@@ -82,8 +82,6 @@ defmodule Credence.Rule.NoListFold do
     |> Sourceror.to_string()
   end
 
-  # ── Fix helpers ────────────────────────────────────────────────────
-
   # foldl piped: source |> List.foldl(acc, fun) → source |> Enum.reduce(acc, fun)
   defp fix_piped_fold(:foldl, source, _call_meta, args, pipe_meta) do
     {:|>, pipe_meta, [source, enum_reduce_call(args)]}
@@ -113,8 +111,6 @@ defmodule Credence.Rule.NoListFold do
   defp enum_reverse_call do
     {{:., [], [{:__aliases__, [], [:Enum]}, :reverse]}, [], []}
   end
-
-  # ── Shared detection ───────────────────────────────────────────────
 
   defp extract_list_fold({{:., meta, [mod, fn_name]}, _, args})
        when fn_name in @flagged_fns and is_list(args) do

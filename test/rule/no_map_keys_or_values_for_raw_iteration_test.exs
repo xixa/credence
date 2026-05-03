@@ -7,8 +7,6 @@ defmodule Credence.Rule.NoMapKeysOrValuesForRawIterationTest do
   end
 
   describe "NoMapKeysOrValuesForRawIteration" do
-    # ── Positive: should detect ───────────────────────────────────────
-
     test "detects chunk_every" do
       [i] = check("Enum.chunk_every(Map.values(m), 2)")
       assert i.rule == :no_map_keys_or_values_for_raw_iteration
@@ -151,8 +149,6 @@ defmodule Credence.Rule.NoMapKeysOrValuesForRawIterationTest do
       assert i.message =~ "reverse_slice"
     end
 
-    # ── Pipe form ────────────────────────────────────────────────────
-
     test "pipe: Map.values |> Enum.with_index()" do
       [i] = check("Map.values(map) |> Enum.with_index()")
       assert i.message =~ "with_index"
@@ -168,8 +164,6 @@ defmodule Credence.Rule.NoMapKeysOrValuesForRawIterationTest do
       assert i.message =~ "chunk_every"
     end
 
-    # ── Triple pipe form ─────────────────────────────────────────────
-
     test "triple pipe: map |> Map.values() |> Enum.with_index()" do
       [i] = check("map |> Map.values() |> Enum.with_index()")
       assert i.message =~ "with_index"
@@ -179,8 +173,6 @@ defmodule Credence.Rule.NoMapKeysOrValuesForRawIterationTest do
       [i] = check("map |> Map.keys() |> Enum.split(2)")
       assert i.message =~ "split"
     end
-
-    # ── Negative: should NOT detect ──────────────────────────────────
 
     test "does not detect Map.values without Enum" do
       assert check("Map.values(m)") == []

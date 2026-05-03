@@ -19,15 +19,11 @@ defmodule Credence.Rule.NoListToTupleForAccessTest do
     assert result == formatted_expected
   end
 
-  # ── fixable? ─────────────────────────────────────────────────────────────
-
   describe "fixable?" do
     test "returns true" do
       assert Credence.Rule.NoListToTupleForAccess.fixable?() == true
     end
   end
-
-  # ── check ────────────────────────────────────────────────────────────────
 
   describe "check/2" do
     test "passes code that uses pattern matching on a list" do
@@ -134,8 +130,6 @@ defmodule Credence.Rule.NoListToTupleForAccessTest do
       assert check(code) == []
     end
   end
-
-  # ── fix ──────────────────────────────────────────────────────────────────
 
   describe "fix/2" do
     test "converts direct List.to_tuple + elem to Enum.at" do

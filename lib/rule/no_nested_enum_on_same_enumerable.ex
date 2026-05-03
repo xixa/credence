@@ -73,8 +73,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
     end)
   end
 
-  # ── Collect outer Enum.* calls ─────────────────────────────────────
-
   defp collect_outer_calls(ast, source) do
     {_ast, calls} =
       Macro.prewalk(ast, [], fn node, acc ->
@@ -95,8 +93,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
 
     calls
   end
-
-  # ── Range extraction with fallback ─────────────────────────────────
 
   defp get_node_range(node, source) do
     case Sourceror.get_range(node) do
@@ -168,8 +164,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
     do_find_close(rest, depth, pos + 1)
   end
 
-  # ── Byte ↔ line/column conversion ──────────────────────────────────
-
   defp line_col_to_byte(source, line, col) do
     lines = String.split(source, "\n")
 
@@ -189,8 +183,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
     col = byte_size(List.last(lines)) + 1
     {line, col}
   end
-
-  # ── Single outer-call fix ───────────────────────────────────────────
 
   defp fix_single_outer_call(source, start_kw, end_kw, outer_var) do
     {start_byte, end_byte} = range_to_bytes(source, start_kw, end_kw)
@@ -218,8 +210,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
     end
   end
 
-  # ── Enum.member? replacement ───────────────────────────────────────
-
   defp replace_member_calls(text, member_calls) do
     {result, _offset} =
       Enum.reduce(member_calls, {text, 0}, fn {rel_start, rel_end, value_arg},
@@ -240,8 +230,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
     result
   end
 
-  # ── Find Enum.member? calls in a text region ───────────────────────
-
   defp find_member_calls_in_range(text, target_var) do
     var_str = Atom.to_string(target_var)
 
@@ -255,8 +243,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
       {match_pos, match_pos + match_len, val}
     end)
   end
-
-  # ── Messages ───────────────────────────────────────────────────────
 
   defp build_message(:member?, var) do
     """
@@ -288,8 +274,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
     """
   end
 
-  # ── AST helpers ────────────────────────────────────────────────────
-
   defp extract_enum_call({{:., _, [{:__aliases__, _, [:Enum]}, func]}, meta, [arg | _]})
        when func in @enum_funcs do
     case var_name(arg) do
@@ -302,8 +286,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerable do
 
   defp var_name({name, _, context}) when is_atom(name) and is_atom(context), do: name
   defp var_name(_), do: nil
-
-  # ── Byte helpers ───────────────────────────────────────────────────
 
   defp range_to_bytes(source, start_kw, end_kw) do
     {

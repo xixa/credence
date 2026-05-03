@@ -89,13 +89,9 @@ defmodule Credence.Rule.NoManualFrequencies do
     |> Sourceror.to_string()
   end
 
-  # ── Fix helpers ────────────────────────────────────────────────────
-
   defp enum_frequencies_call(enum) do
     {{:., [], [{:__aliases__, [], [:Enum]}, :frequencies]}, [], [enum]}
   end
-
-  # ── Shared detection ───────────────────────────────────────────────
 
   # Sourceror wraps literals in {:__block__, _, [value]}
   defp unwrap_literal({:__block__, _, [val]}), do: val

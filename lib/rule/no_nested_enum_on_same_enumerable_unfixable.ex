@@ -62,10 +62,8 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerableUnfixable do
     issues
   end
 
-  # ── Pipe desugaring ────────────────────────────────────────────────
   # Transforms `x |> f(a, b)` into `f(x, a, b)` so the piped-in value
   # appears as the first argument, matching the direct-call pattern.
-
   defp desugar_pipes(ast) do
     Macro.prewalk(ast, fn
       {:|>, _, [left, {call, meta, args}]} when is_list(args) ->
@@ -75,8 +73,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerableUnfixable do
         node
     end)
   end
-
-  # ── Messages ───────────────────────────────────────────────────────
 
   defp build_message(:filter, var) do
     """
@@ -107,8 +103,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerableUnfixable do
     • Avoiding repeated scans of the same list
     """
   end
-
-  # ── AST helpers ────────────────────────────────────────────────────
 
   defp extract_enum_call({{:., _, [{:__aliases__, _, [:Enum]}, func]}, _meta, [arg | _]})
        when func in @enum_funcs do

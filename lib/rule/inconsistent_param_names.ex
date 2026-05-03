@@ -244,8 +244,6 @@ defmodule Credence.Rule.InconsistentParamNames do
     end)
   end
 
-  # ── Shared helpers ─────────────────────────────────────────────────
-
   # Returns the base name (without leading underscore) as a string,
   # or nil for bare `_` and non-variable nodes.
   defp extract_base_name({name, _, ctx}) when is_atom(name) and is_atom(ctx) do

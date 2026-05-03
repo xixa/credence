@@ -118,8 +118,6 @@ defmodule Credence.Rule.NoManualStringReverse do
     |> Sourceror.to_string()
   end
 
-  # ── Fix helpers ──────────────────────────────────────────────
-
   # Extracts the subject from String.graphemes in the middle of a pipe chain.
   # Handles both `subject |> String.graphemes()` and `String.graphemes(subject)`.
   defp graphemes_in_middle({:|>, _, [subject, graphemes]}) do
@@ -156,8 +154,6 @@ defmodule Credence.Rule.NoManualStringReverse do
   # A separator would change semantics (e.g. Enum.join(list, "-") ≠ String.reverse).
   defp join_no_separator?({{:., _, [{:__aliases__, _, [:Enum]}, :join]}, _, []}), do: true
   defp join_no_separator?(_), do: false
-
-  # ── Check helpers ────────────────────────────────────────────
 
   defp rightmost({:|>, _, [_, right]}), do: right
   defp rightmost(other), do: other

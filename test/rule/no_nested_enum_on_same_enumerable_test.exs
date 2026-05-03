@@ -11,8 +11,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerableTest do
     Credence.Rule.NoNestedEnumOnSameEnumerable.fix(source, [])
   end
 
-  # ── check/2 tests ──────────────────────────────────────────────────
-
   describe "check/2" do
     test "detects member? inside map" do
       code = """
@@ -46,8 +44,6 @@ defmodule Credence.Rule.NoNestedEnumOnSameEnumerableTest do
       assert check(code) == []
     end
   end
-
-  # ── fix/2 tests ────────────────────────────────────────────────────
 
   describe "fix/2" do
     test "basic: member? inside map" do

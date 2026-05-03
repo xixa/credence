@@ -245,8 +245,6 @@ defmodule Credence.Rule.NoMapUpdateThenFetchTest do
       refute fixed =~ "Map.get("
     end
 
-    # ── Negative cases (fix should be a no-op) ──────────────────────
-
     test "does not modify code without Map.update" do
       code = """
       defmodule GoodCode do

@@ -50,13 +50,9 @@ defmodule Credence.Rule.NoExplicitMinReduce do
     |> Sourceror.to_string()
   end
 
-  # ── Fix helpers ────────────────────────────────────────────────────
-
   defp enum_min_call(enum) do
     {{:., [], [{:__aliases__, [], [:Enum]}, :min]}, [], [enum]}
   end
-
-  # ── Shared detection ───────────────────────────────────────────────
 
   defp reduce_call?({{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, _}), do: true
   defp reduce_call?({{:., _, [:Enum, :reduce]}, _, _}), do: true

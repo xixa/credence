@@ -17,8 +17,6 @@ defmodule Credence.Rule.NoParamRebindingTest do
     {fixed, issues}
   end
 
-  # ── check ──────────────────────────────────────────────────────────
-
   describe "check" do
     test "passes code with no parameter rebinding" do
       code = """
@@ -105,8 +103,6 @@ defmodule Credence.Rule.NoParamRebindingTest do
       assert check(code) == []
     end
   end
-
-  # ── fix ────────────────────────────────────────────────────────────
 
   describe "fix" do
     test "renames simple parameter rebinding in Enum.reduce" do

@@ -92,8 +92,6 @@ defmodule Credence.Rule.NoDoubleSortSameList do
     end
   end
 
-  # ── Shared collection ──────────────────────────────────────────────
-
   # Returns [{source_name, direction, line, bound_var_name}, ...]
   defp collect_bound_sorts(ast) do
     {_, acc} =
@@ -113,8 +111,6 @@ defmodule Credence.Rule.NoDoubleSortSameList do
 
     acc
   end
-
-  # ── Sort call extraction ───────────────────────────────────────────
 
   # Direct call: Enum.sort(source) / Enum.sort(source, :desc)
   defp rhs_sort_info({{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, args}) do
@@ -156,8 +152,6 @@ defmodule Credence.Rule.NoDoubleSortSameList do
   defp extract_source_var({name, _, nil}) when is_atom(name), do: name
   defp extract_source_var({:|>, _, [left, _]}), do: extract_source_var(left)
   defp extract_source_var(_), do: nil
-
-  # ── Fix helpers ────────────────────────────────────────────────────
 
   defp enum_reverse_call(arg) do
     {{:., [], [{:__aliases__, [], [:Enum]}, :reverse]}, [], [arg]}

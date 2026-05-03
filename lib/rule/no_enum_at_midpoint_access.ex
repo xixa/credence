@@ -124,8 +124,6 @@ defmodule Credence.Rule.NoEnumAtMidpointAccess do
     |> Sourceror.to_string()
   end
 
-  # ── Fix: function-level transformation ─────────────────────────────
-
   defp maybe_fix_function({kind, meta, [head, body_kw]} = node) when is_list(body_kw) do
     func_name = extract_func_name(head)
     body = extract_do_body(body_kw)
@@ -218,8 +216,6 @@ defmodule Credence.Rule.NoEnumAtMidpointAccess do
     end)
   end
 
-  # ── Fix helpers ────────────────────────────────────────────────────
-
   defp list_to_tuple_call(arg) do
     {{:., [], [{:__aliases__, [], [:List]}, :to_tuple]}, [], [arg]}
   end
@@ -231,8 +227,6 @@ defmodule Credence.Rule.NoEnumAtMidpointAccess do
       other -> other
     end)
   end
-
-  # ── Function collection ────────────────────────────────────────────
 
   defp collect_function_defs(ast) do
     {_, fns} =
@@ -254,8 +248,6 @@ defmodule Credence.Rule.NoEnumAtMidpointAccess do
 
     fns
   end
-
-  # ── Issue detection ────────────────────────────────────────────────
 
   defp find_issues_in_body(body) do
     {_, {issues, _mids}} =
@@ -287,8 +279,6 @@ defmodule Credence.Rule.NoEnumAtMidpointAccess do
 
     Enum.reverse(issues)
   end
-
-  # ── Shared helpers ─────────────────────────────────────────────────
 
   defp extract_do_body(body_kw) when is_list(body_kw) do
     Enum.find_value(body_kw, fn

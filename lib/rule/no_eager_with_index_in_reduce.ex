@@ -178,7 +178,7 @@ defmodule Credence.Rule.NoEagerWithIndexInReduce do
     end
   end
 
-  # ── Fn transformation for :reduce strategy ────────────────────────
+  # ── Fn transformation for :reduce strategy ───
   #
   # Transforms:
   #   fn {val, idx}, acc -> body end
@@ -262,8 +262,6 @@ defmodule Credence.Rule.NoEagerWithIndexInReduce do
     wrap_two_tuple({{:+, [], [{name, [], nil}, 1]}, expr})
   end
 
-  # ── Pipe helpers (shared) ──────────────────────────────────────────
-
   # Replaces Enum.with_index → Stream.with_index in the pipe chain
   defp replace_enum_with_stream(
          {{:., dot_meta, [{:__aliases__, _, [:Enum]}, :with_index]}, call_meta, args}
@@ -293,8 +291,6 @@ defmodule Credence.Rule.NoEagerWithIndexInReduce do
   end
 
   defp strip_with_index(node), do: node
-
-  # ── Shared detection helpers ───────────────────────────────────────
 
   defp with_index_on_right?({:|>, _, [_, right]}), do: with_index_call?(right)
   defp with_index_on_right?(node), do: with_index_call?(node)

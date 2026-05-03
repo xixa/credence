@@ -129,8 +129,6 @@ defmodule Credence.Rule.AvoidGraphemesEnumCount do
     |> Sourceror.to_string()
   end
 
-  # ── Fix: no-predicate pipe ─────────────────────────────────────────
-
   # String.graphemes(x) |> Enum.count() → String.length(x)
   defp fix_no_predicate_pipe({{:., _, [{:__aliases__, _, [:String]}, :graphemes]}, _, [subject]}) do
     string_length_call(subject)
@@ -144,8 +142,6 @@ defmodule Credence.Rule.AvoidGraphemesEnumCount do
   end
 
   defp fix_no_predicate_pipe(lhs), do: lhs
-
-  # ── Fix: predicate pipe ────────────────────────────────────────────
 
   # String.graphemes(x) |> Enum.count(pred) → Stream.unfold(x, &...) |> Enum.count(pred)
   defp fix_predicate_pipe(
@@ -168,8 +164,6 @@ defmodule Credence.Rule.AvoidGraphemesEnumCount do
 
   defp fix_predicate_pipe(lhs, rhs), do: {:|>, [], [lhs, rhs]}
 
-  # ── AST builders ───────────────────────────────────────────────────
-
   defp string_length_call(subject) do
     {{:., [], [{:__aliases__, [], [:String]}, :length]}, [], [subject]}
   end
@@ -191,8 +185,6 @@ defmodule Credence.Rule.AvoidGraphemesEnumCount do
      ]}
   end
 
-  # ── Shared detection helpers ───────────────────────────────────────
-
   defp extract_graphemes_arg({{:., _, [{:__aliases__, _, [:String]}, :graphemes]}, _, [subject]}),
     do: {:ok, subject}
 
@@ -212,8 +204,6 @@ defmodule Credence.Rule.AvoidGraphemesEnumCount do
        do: true
 
   defp graphemes_call?(_), do: false
-
-  # ── Issue builders ─────────────────────────────────────────────────
 
   defp length_issue(meta) do
     %Issue{

@@ -82,8 +82,6 @@ defmodule Credence.Rule.AvoidGraphemesLength do
     |> Sourceror.to_string()
   end
 
-  # ── Fix helpers ────────────────────────────────────────────────────
-
   # String.graphemes(x) |> length() → String.length(x)
   defp fix_pipe_length(
          {{:., _, [{:__aliases__, _, [:String]}, :graphemes]}, _, args},
@@ -111,8 +109,6 @@ defmodule Credence.Rule.AvoidGraphemesLength do
   defp string_length_call(subject) do
     {{:., [], [{:__aliases__, [], [:String]}, :length]}, [], [subject]}
   end
-
-  # ── Shared detection helpers ───────────────────────────────────────
 
   defp immediate_graphemes?({:|>, _, [_, rhs]}), do: graphemes_call?(rhs)
   defp immediate_graphemes?(other), do: graphemes_call?(other)

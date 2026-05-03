@@ -16,8 +16,6 @@ defmodule Credence.Rule.NoEnumAtMidpointAccessTest do
     end
   end
 
-  # ── Detection ──────────────────────────────────────────────────────
-
   describe "detects non-recursive midpoint access patterns" do
     test "flags Enum.at with mid from low + div(high - low, 2)" do
       code = """
@@ -234,8 +232,6 @@ defmodule Credence.Rule.NoEnumAtMidpointAccessTest do
       assert check(code) == []
     end
   end
-
-  # ── Fix ────────────────────────────────────────────────────────────
 
   describe "fix: direct call with midpoint variable" do
     test "inserts List.to_tuple and replaces Enum.at with elem" do

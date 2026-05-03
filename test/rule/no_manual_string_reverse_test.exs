@@ -11,10 +11,6 @@ defmodule Credence.Rule.NoManualStringReverseTest do
     Credence.Rule.NoManualStringReverse.fix(code, [])
   end
 
-  # ==========================================================================
-  # CHECK
-  # ==========================================================================
-
   describe "NoManualStringReverse - check" do
     # --- POSITIVE CASES (should flag) ---
 
@@ -147,10 +143,6 @@ defmodule Credence.Rule.NoManualStringReverseTest do
       assert check(code) == []
     end
   end
-
-  # ==========================================================================
-  # FIX
-  # ==========================================================================
 
   describe "NoManualStringReverse - fix" do
     test "fixes simple pipeline" do

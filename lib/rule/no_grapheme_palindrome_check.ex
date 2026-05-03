@@ -112,8 +112,6 @@ defmodule Credence.Rule.NoGraphemePalindromeCheck do
     end
   end
 
-  # ── Fix helpers ────────────────────────────────────────────────────
-
   # Strip the terminal String.graphemes/String.to_charlist from an expression
   defp strip_decomposition(rhs) do
     case rhs do
@@ -145,8 +143,6 @@ defmodule Credence.Rule.NoGraphemePalindromeCheck do
   end
 
   defp maybe_replace_reverse(node, _decompose_vars), do: node
-
-  # ── Shared detection ───────────────────────────────────────────────
 
   # Collect variables bound to an expression ending in String.graphemes/to_charlist
   defp collect_decompose_vars(ast) do
