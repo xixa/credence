@@ -14,17 +14,28 @@ defmodule Credence.Rule.NoIsPrefixForNonGuard do
   function because Python and JavaScript use `is_` freely. In Elixir, this
   misleads readers into thinking the function is guard-safe:
 
-      # Flagged — misleading convention
+  ## Bad
+
       def is_palindrome(str), do: str == String.reverse(str)
 
-      # Idiomatic — ? suffix for non-guard booleans
+      defp is_valid_email(str), do: String.contains?(str, "@")
+
+  ## Good
+
       def palindrome?(str), do: str == String.reverse(str)
+
+      defp valid_email?(str), do: String.contains?(str, "@")
 
   ## Exceptions
 
   Guard-safe BIFs from Erlang that legitimately use the `is_` prefix
   (like `is_list/1`, `is_binary/1`) are ignored so that user-defined wrapper
   functions shadowing them are not mistakenly flagged.
+
+  ## Auto-fix
+
+  The fix renames the function definition and all bare (unqualified) call sites
+  within the same source file. `is_valid_foo` becomes `valid_foo?`.
   """
 
   use Credence.Rule
@@ -36,6 +47,9 @@ defmodule Credence.Rule.NoIsPrefixForNonGuard do
     is_function is_integer is_list is_map is_map_key is_nil
     is_number is_pid is_port is_reference is_struct is_tuple
   )a
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
@@ -51,6 +65,67 @@ defmodule Credence.Rule.NoIsPrefixForNonGuard do
     |> Enum.uniq_by(fn issue -> {issue.meta[:line], issue.message} end)
     |> Enum.reverse()
   end
+
+  @impl true
+  def fix(source, _opts) do
+    ast = Sourceror.parse_string!(source)
+    rename_map = collect_renames(ast)
+
+    if map_size(rename_map) == 0 do
+      source
+    else
+      ast
+      |> Macro.postwalk(fn node -> apply_renames(node, rename_map) end)
+      |> Sourceror.to_string()
+    end
+  end
+
+  # ── Fix helpers ──────────────────────────────────────────────────────
+
+  # First pass: walk defs to build %{is_foo => :foo?} rename map
+  defp collect_renames(ast) do
+    {_ast, renames} =
+      Macro.prewalk(ast, %{}, fn
+        {def_type, _meta, [{:when, _, [{fn_name, _, args}, _guard]}, _body]} = node, acc
+        when def_type in [:def, :defp] and is_atom(fn_name) and is_list(args) ->
+          {node, maybe_add_rename(acc, fn_name)}
+
+        {def_type, _meta, [{fn_name, _, args}, _body]} = node, acc
+        when def_type in [:def, :defp] and is_atom(fn_name) and is_list(args) and
+               fn_name != :when ->
+          {node, maybe_add_rename(acc, fn_name)}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    renames
+  end
+
+  defp maybe_add_rename(acc, fn_name) do
+    str = Atom.to_string(fn_name)
+
+    if String.starts_with?(str, "is_") and not String.ends_with?(str, "?") and
+         fn_name not in @erlang_guards do
+      new_name = str |> String.trim_leading("is_") |> Kernel.<>("?") |> String.to_atom()
+      Map.put(acc, fn_name, new_name)
+    else
+      acc
+    end
+  end
+
+  # Second pass: rename every bare occurrence of old names
+  # This covers: def heads, calls, recursive calls, captures, @spec, etc.
+  defp apply_renames({fn_name, meta, args} = node, rename_map) when is_atom(fn_name) do
+    case Map.get(rename_map, fn_name) do
+      nil -> node
+      new_name -> {new_name, meta, args}
+    end
+  end
+
+  defp apply_renames(node, _rename_map), do: node
+
+  # ── Check helpers ────────────────────────────────────────────────────
 
   # Guarded clause: must come first to avoid :when match
   defp check_node({def_type, meta, [{:when, _, [{fn_name, _, args}, _guard]}, _body]})

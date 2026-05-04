@@ -34,6 +34,9 @@ defmodule Credence.Rule.DescriptiveNames do
   alias Credence.Issue
 
   @impl true
+  def fixable?, do: false
+
+  @impl true
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn

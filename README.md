@@ -110,7 +110,7 @@ Pass custom rules via the `:rules` option or add them to `@default_rules` in `Cr
 | `NoGraphemePalindromeCheck` | String palindrome check via `String.graphemes` — use `String.reverse/1` | ✅ |
 | `NoGuardEqualityForPatternMatch` | Guard equality check on a parameter that could be a pattern match clause | ✅ |
 | `NoIntegerToStringDigits` | `Integer.to_string/1` \|> `String.graphemes/1` — use `Integer.digits/1` | ✅ |
-| `NoIsPrefixForNonGuard` | `is_` prefix on non-guard `def`/`defp` functions | ❌ |
+| `NoIsPrefixForNonGuard` | `is_` prefix on non-guard `def`/`defp` functions | ✅ |
 | `NoKernelShadowing` | Variables that shadow `Kernel` functions | ❌ |
 | `NoLengthInGuard` | `length/1` inside guard clauses — use pattern matching instead | ❌ |
 | `NoListAppendInLoop` | `++` inside looping constructs — O(n²) | ❌ |
