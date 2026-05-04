@@ -148,7 +148,7 @@ Pass custom rules via the `:rules` option or add them to `@default_rules` in `Cr
 | `NoSortThenReverseUnfixable` | Sort then reverse via intermediate variable (unfixable variant) | ❌ |
 | `NoStringConcatInLoop` | `<>` string concatenation inside loops — use `IO.iodata_to_binary` / iodata | ✅ |
 | `NoStringConcatInLoopUnfixable` | `<>` string concatenation in complex loops (unfixable variant) | ❌ |
-| `NoStringLengthForCharCheck` | `String.length(x) == 1` to check for a single character — use pattern matching | ❌ |
+| `NoStringLengthForCharCheck` | `String.length(x) == 1` to check for a single character — use pattern matching | ✅ |
 | `NoTakeWhileLengthCheck` | `Enum.take_while/2 \|> length/1` — use `Enum.count/2` with a predicate | ✅ |
 | `NoUnderscoreFunctionName` | Leading `_` in function names to indicate privacy — use `defp` instead | ✅ |
 | `NoUnnecessaryCatchAllRaise` | Catch-all clause where every argument is a wildcard and the body just raises | ✅ |
