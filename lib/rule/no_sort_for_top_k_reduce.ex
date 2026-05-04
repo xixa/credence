@@ -12,8 +12,8 @@ defmodule Credence.Rule.NoSortForTopKReduce do
 
   | Pattern                                    | Suggested replacement           |
   | ------------------------------------------ | ------------------------------- |
-  | `Enum.sort/1 \|> Enum.take(k)` for k > 1  | `Enum.reduce/3` (track top k)  |
-  | `Enum.sort/1 \|> Enum.at(1)`               | `Enum.reduce/3` (track top two)|
+  | `Enum.sort/1 \\|> Enum.take(k)` for k > 1  | `Enum.reduce/3` (track top k)  |
+  | `Enum.sort/1 \\|> Enum.at(1)`               | `Enum.reduce/3` (track top two)|
   | (same patterns with `Enum.reverse()` before the terminal step) ||
 
   These patterns are **not automatically fixable** because the correct
@@ -38,37 +38,67 @@ defmodule Credence.Rule.NoSortForTopKReduce do
 
   @impl true
   def check(ast, _opts) do
-    {_ast, issues} =
-      Macro.prewalk(ast, [], fn node, issues ->
-        case extract_pipeline(node) do
-          {:ok, var, op, k, reverses, meta} ->
-            issue = %Issue{
-              rule: :no_sort_for_top_k_reduce,
-              message: build_message(op, var, k, reverses),
-              meta: %{line: Keyword.get(meta, :line)}
-            }
-            {node, [issue | issues]}
-
-          :error ->
-            {node, issues}
-        end
-      end)
-
-    Enum.reverse(issues)
+    collect_issues(ast, []) |> Enum.reverse()
   end
 
-  # ── Check helpers ────────────────────────────────────────────────
+  # ── Custom AST traversal ─────────────────────────────────────────
+  #
+  # We avoid Macro.prewalk because it visits inner |> sub-expressions
+  # independently.  For `sort |> take(2) |> length()`, prewalk would
+  # also visit the inner `sort |> take(2)` node and incorrectly flag
+  # it.  Instead, when we encounter a |> node we flatten the entire
+  # pipeline, analyse it once, then recurse only into each step's
+  # *arguments* — never back into the pipe structure.
 
-  defp extract_pipeline({:|>, meta, _} = node) do
+  # Pipeline node — flatten, analyse, then recurse into step args only.
+  defp collect_issues({:|>, meta, _} = node, issues) do
     pipeline = flatten_pipeline(node)
 
-    case analyze_pipeline(pipeline) do
-      {:ok, var, op, k, reverses} -> {:ok, var, op, k, reverses, meta}
-      :error -> :error
-    end
+    issues =
+      case analyze_pipeline(pipeline) do
+        {:ok, var, op, k, reverses} ->
+          issue = %Issue{
+            rule: :no_sort_for_top_k_reduce,
+            message: build_message(op, var, k, reverses),
+            meta: %{line: Keyword.get(meta, :line)}
+          }
+
+          [issue | issues]
+
+        :error ->
+          issues
+      end
+
+    # Recurse into each pipeline step's arguments, NOT into the pipe structure
+    Enum.reduce(pipeline, issues, fn step, acc ->
+      step |> step_args() |> Enum.reduce(acc, fn arg, a -> collect_issues(arg, a) end)
+    end)
   end
 
-  defp extract_pipeline(_), do: :error
+  # Regular 3-tuple AST node (calls, blocks, etc.)
+  defp collect_issues({_form, _meta, args}, issues) when is_list(args) do
+    Enum.reduce(args, issues, fn arg, acc -> collect_issues(arg, acc) end)
+  end
+
+  # 2-tuple — keyword list entries like {:do, body}, {:else, body}
+  defp collect_issues({key, value}, issues) when is_atom(key) do
+    collect_issues(value, issues)
+  end
+
+  # Lists — argument lists, block bodies, keyword lists
+  defp collect_issues(list, issues) when is_list(list) do
+    Enum.reduce(list, issues, fn item, acc -> collect_issues(item, acc) end)
+  end
+
+  # Leaf nodes (atoms, numbers, strings, etc.)
+  defp collect_issues(_leaf, issues), do: issues
+
+  # Extract the user-visible arguments from a single pipeline step.
+  defp step_args({{:., _, _}, _, args}) when is_list(args), do: args
+  defp step_args({_name, _, args}) when is_list(args), do: args
+  defp step_args(_), do: []
+
+  # ── Pipeline helpers ─────────────────────────────────────────────
 
   defp flatten_pipeline({:|>, _, [left, right]}) do
     flatten_pipeline(left) ++ [right]

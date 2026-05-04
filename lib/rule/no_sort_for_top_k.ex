@@ -37,33 +37,83 @@ defmodule Credence.Rule.NoSortForTopK do
   @impl true
   def fixable?, do: true
 
+  # ── Check ────────────────────────────────────────────────────────
+  #
+  # We use a custom recursive walk instead of Macro.prewalk so that
+  # when we encounter a pipe node we analyse the *entire* flattened
+  # pipeline as a unit.  We then recurse into each step's arguments
+  # (but NOT into sub-pipes) — this prevents a longer pipeline like
+  # `sort |> take(1) |> length()` from having its inner sub-pipe
+  # `sort |> take(1)` independently flagged as a false positive.
+  # ────────────────────────────────────────────────────────────────
+
   @impl true
   def check(ast, _opts) do
-    {_ast, issues} =
-      Macro.prewalk(ast, [], fn node, issues ->
-        case extract_pipeline(node) do
-          {:ok, var, op, reverses, meta} ->
-            issue = %Issue{
-              rule: :no_sort_for_top_k,
-              message: build_check_message(op, var, reverses),
-              meta: %{line: Keyword.get(meta, :line)}
-            }
-            {node, [issue | issues]}
-
-          :error ->
-            {node, issues}
-        end
-      end)
-
-    Enum.reverse(issues)
+    ast
+    |> collect_issues()
+    |> Enum.reverse()
   end
+
+  defp collect_issues({:|>, meta, _} = node) do
+    pipeline = flatten_pipeline(node)
+
+    own_issues =
+      case analyze_pipeline(pipeline) do
+        {:ok, var, op, reverses} ->
+          issue = %Issue{
+            rule: :no_sort_for_top_k,
+            message: build_check_message(op, var, reverses),
+            meta: %{line: Keyword.get(meta, :line)}
+          }
+
+          [issue]
+
+        :error ->
+          []
+      end
+
+    # Walk into each step's own arguments, not into the pipe structure
+    step_issues = Enum.flat_map(pipeline, &collect_issues_from_step_args/1)
+    own_issues ++ step_issues
+  end
+
+  defp collect_issues({left, right}) do
+    collect_issues(left) ++ collect_issues(right)
+  end
+
+  defp collect_issues({_, _, args}) when is_list(args) do
+    Enum.flat_map(args, &collect_issues/1)
+  end
+
+  defp collect_issues(list) when is_list(list) do
+    Enum.flat_map(list, &collect_issues/1)
+  end
+
+  defp collect_issues(_), do: []
+
+  defp collect_issues_from_step_args({_, _, args}) when is_list(args) do
+    Enum.flat_map(args, &collect_issues/1)
+  end
+
+  defp collect_issues_from_step_args(_), do: []
+
+  # ── Fix ──────────────────────────────────────────────────────────
 
   @impl true
   def fix(source, _opts) do
-    source
-    |> Sourceror.parse_string!()
-    |> transform_ast()
-    |> Sourceror.to_string()
+    result =
+      source
+      |> Sourceror.parse_string!()
+      |> transform_ast()
+      |> Sourceror.to_string()
+
+    # Sourceror.to_string/1 strips trailing newlines; preserve them
+    # so that round-tripping unchanged code stays identical.
+    if String.ends_with?(source, "\n") and not String.ends_with?(result, "\n") do
+      result <> "\n"
+    else
+      result
+    end
   end
 
   # ── Fix: AST transformation ──────────────────────────────────────
@@ -153,14 +203,24 @@ defmodule Credence.Rule.NoSortForTopK do
   defp min_or_max(0), do: :min
   defp min_or_max(_), do: :max
 
-  defp classify_terminal({{:., _, [mod, :take]}, _, [k]}) when is_integer(k) do
-    if enum_module?(mod), do: {:ok, :take, k}, else: :error
+  # Sourceror wraps bare integer literals in {:__block__, meta, [n]},
+  # so we need to unwrap before comparing.
+  defp unwrap_int({:__block__, _, [n]}) when is_integer(n), do: n
+  defp unwrap_int(n) when is_integer(n), do: n
+  defp unwrap_int(_), do: nil
+
+  defp classify_terminal({{:., _, [mod, :take]}, _, [k_node]}) do
+    k = unwrap_int(k_node)
+
+    if k != nil and enum_module?(mod), do: {:ok, :take, k}, else: :error
   end
 
   defp classify_terminal({:hd, _, []}), do: {:ok, :hd, 1}
 
-  defp classify_terminal({{:., _, [mod, :at]}, _, [idx]}) when is_integer(idx) do
-    if enum_module?(mod), do: {:ok, :at, idx}, else: :error
+  defp classify_terminal({{:., _, [mod, :at]}, _, [idx_node]}) do
+    idx = unwrap_int(idx_node)
+
+    if idx != nil and enum_module?(mod), do: {:ok, :at, idx}, else: :error
   end
 
   defp classify_terminal(_), do: :error
@@ -180,17 +240,6 @@ defmodule Credence.Rule.NoSortForTopK do
   end
 
   # ── Check helpers ────────────────────────────────────────────────
-
-  defp extract_pipeline({:|>, meta, _} = node) do
-    pipeline = flatten_pipeline(node)
-
-    case analyze_pipeline(pipeline) do
-      {:ok, var, op, reverses} -> {:ok, var, op, reverses, meta}
-      :error -> :error
-    end
-  end
-
-  defp extract_pipeline(_), do: :error
 
   defp flatten_pipeline({:|>, _, [left, right]}) do
     flatten_pipeline(left) ++ [right]
@@ -288,6 +337,8 @@ defmodule Credence.Rule.NoSortForTopK do
   defp enum_module?({:__aliases__, _, [:Enum]}), do: true
   defp enum_module?(_), do: false
 
+  # Handle capture arguments like &1
+  defp var_name({:&, _, [n]}) when is_integer(n), do: :"&#{n}"
   defp var_name({name, _, context}) when is_atom(name) and is_atom(context), do: name
   defp var_name(_), do: nil
 end
