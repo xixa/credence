@@ -59,7 +59,7 @@ defmodule Credence.Rule.NoRedundantEnumJoinSeparator do
   @impl true
   def fix(source, _opts) do
     source
-    |> Sourceror.parse_string!()
+    |> Code.string_to_quoted!()
     |> Macro.postwalk(fn
       # Direct call: Enum.join(list, "") → Enum.join(list)
       {{:., _, [{:__aliases__, _, [:Enum]}, :join]}, _meta, [list_arg, ""]} ->
@@ -80,7 +80,9 @@ defmodule Credence.Rule.NoRedundantEnumJoinSeparator do
       node ->
         node
     end)
-    |> Sourceror.to_string()
+    |> Macro.to_string()
+    |> Code.format_string!()
+    |> IO.iodata_to_binary()
   end
 
   defp build_issue(meta) do
