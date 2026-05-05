@@ -84,6 +84,8 @@ defmodule Credence.Rule.NoMapThenAggregate do
     |> Sourceror.to_string()
   end
 
+  # ── Pipeline fix ────────────────────────────────────────────────
+
   defp fix_pipeline({:|>, _, _} = node) do
     steps = flatten_pipeline(node)
 
@@ -99,13 +101,10 @@ defmodule Credence.Rule.NoMapThenAggregate do
 
         reduce_call =
           if before == [] do
-            # Map is the first step — extract the source from map's args
             enum_source = extract_map_source(first)
             build_reduce(enum_source, map_fn, agg_fn)
           else
-            # Map has a previous step as its source
-            nil_reduce = build_reduce(nil, map_fn, agg_fn)
-            nil_reduce
+            build_reduce(nil, map_fn, agg_fn)
           end
 
         rebuild_pipeline(before, reduce_call, after_)
@@ -113,50 +112,122 @@ defmodule Credence.Rule.NoMapThenAggregate do
     end)
   end
 
+  # ── Build the reduce replacement ────────────────────────────────
+
   defp build_reduce(source, map_fn, agg_fn) do
-    {body_fn, needs_initial} =
-      case agg_fn do
-        :max ->
-          {fn var_el, var_best ->
-             {{:., [], [{:__aliases__, [], [:Kernel]}, :max]}, [],
-              [apply_call(map_fn, var_el), var_best]}
-           end, false}
+    el_var = {:el, [], Elixir}
 
-        :min ->
-          {fn var_el, var_best ->
-             {{:., [], [{:__aliases__, [], [:Kernel]}, :min]}, [],
-              [apply_call(map_fn, var_el), var_best]}
-           end, false}
+    case agg_fn do
+      :sum ->
+        acc_var = {:acc, [], Elixir}
+        body = {:+, [], [acc_var, inline_call(map_fn, el_var)]}
+        reduce_fn = {:fn, [], [{:->, [], [[el_var, acc_var], body]}]}
 
-        :sum ->
-          {fn var_el, var_acc ->
-             {{:., [], [{:__aliases__, [], [:Kernel]}, :+]}, [],
-              [var_acc, apply_call(map_fn, var_el)]}
-           end, true}
-      end
+        args =
+          if source do
+            [source, wrap_literal(0), reduce_fn]
+          else
+            [wrap_literal(0), reduce_fn]
+          end
 
-    reduce_fn = reduce_fn_ast(body_fn, needs_initial)
+        {{:., [], [{:__aliases__, [], [:Enum]}, :reduce]}, [], args}
 
-    if needs_initial do
-      {{:., [], [{:__aliases__, [], [:Enum]}, :reduce]}, [],
-       [source, {:__block__, [], [0]}, reduce_fn]}
-    else
-      {{:., [], [{:__aliases__, [], [:Enum]}, :reduce]}, [], [source, reduce_fn]}
+      agg when agg in [:max, :min] ->
+        best_var = {:best, [], Elixir}
+        body = {agg, [], [inline_call(map_fn, el_var), best_var]}
+        reduce_fn = {:fn, [], [{:->, [], [[el_var, best_var], body]}]}
+
+        args = if source, do: [source, reduce_fn], else: [reduce_fn]
+
+        {{:., [], [{:__aliases__, [], [:Enum]}, :reduce]}, [], args}
     end
   end
 
-  defp apply_call(map_fn, var_el) do
-    apply_fn = {:apply, [], Elixir}
-    {apply_fn, [], [map_fn, {:__block__, [], [var_el]}]}
+  # ── Inline a map function applied to a variable ─────────────────
+  #
+  # Instead of generating `apply(fn, el)` or `fn.(el)`, we inline
+  # the function call directly:
+  #
+  #   &String.length/1  → String.length(el)
+  #   &byte_size/1      → byte_size(el)
+  #   fn w -> w * 2 end → el * 2
+  #   & &1.price        → el.price    (falls back to capture call)
+
+  # Remote capture: &Mod.fun/arity → Mod.fun(el)
+  defp inline_call(
+         {:&, _,
+          [
+            {:/, _,
+             [
+               {{:., _, [mod, fun]}, _, []},
+               _arity
+             ]}
+          ]},
+         var
+       ) do
+    {{:., [], [mod, fun]}, [], [var]}
   end
 
-  defp reduce_fn_ast(body_fn, needs_initial) do
-    var_el = {:_el, [], Elixir}
-    var_second = if needs_initial, do: {:_acc, [], Elixir}, else: {:_best, [], Elixir}
-
-    body = body_fn.(var_el, var_second)
-    {:fn, [], [{:->, [], [[var_el, var_second], body]}]}
+  # Remote capture with __block__-wrapped arity (Sourceror form)
+  defp inline_call(
+         {:&, _,
+          [
+            {:/, _,
+             [
+               {{:., _, [mod, fun]}, _, []},
+               {:__block__, _, [_arity]}
+             ]}
+          ]},
+         var
+       ) do
+    {{:., [], [mod, fun]}, [], [var]}
   end
+
+  # Local capture: &fun/arity → fun(el)
+  defp inline_call(
+         {:&, _, [{:/, _, [{fun, _, _}, _arity]}]},
+         var
+       )
+       when is_atom(fun) do
+    {fun, [], [var]}
+  end
+
+  # Anonymous function: fn param -> body end → substitute param with el
+  defp inline_call(
+         {:fn, _, [{:->, _, [[{param, _, ctx}], body]}]},
+         var
+       )
+       when is_atom(param) and is_atom(ctx) do
+    substitute(body, param, var)
+  end
+
+  # Fallback: f.(el)
+  defp inline_call(map_fn, var) do
+    {{:., [], [map_fn]}, [], [var]}
+  end
+
+  # ── Variable substitution ───────────────────────────────────────
+
+  defp substitute({name, _meta, ctx}, name, replacement) when is_atom(ctx),
+    do: replacement
+
+  defp substitute({form, meta, args}, name, replacement) when is_list(args),
+    do: {form, meta, Enum.map(args, &substitute(&1, name, replacement))}
+
+  defp substitute({left, right}, name, replacement),
+    do: {substitute(left, name, replacement), substitute(right, name, replacement)}
+
+  defp substitute(list, name, replacement) when is_list(list),
+    do: Enum.map(list, &substitute(&1, name, replacement))
+
+  defp substitute(other, _, _), do: other
+
+  # ── Literal wrapping (Sourceror compat) ─────────────────────────
+
+  defp wrap_literal(int) when is_integer(int),
+    do: {:__block__, [token: Integer.to_string(int)], [int]}
+
+  # ── Check helpers ───────────────────────────────────────────────
 
   defp check_node({:|>, meta, _} = node) do
     pipeline = flatten_pipeline(node)
@@ -188,67 +259,59 @@ defmodule Credence.Rule.NoMapThenAggregate do
     end
   end
 
+  # ── AST matchers ────────────────────────────────────────────────
+
   defp map_call?({{:., _, [mod, :map]}, _, args})
-       when is_list(args) and length(args) == 2 do
-    enum_module?(mod)
-  end
+       when is_list(args) and length(args) == 2,
+       do: enum_module?(mod)
 
   defp map_call?(_), do: false
 
   defp map_step?({{:., _, [mod, :map]}, _, args})
-       when is_list(args) and length(args) in [1, 2] do
-    enum_module?(mod)
-  end
+       when is_list(args) and length(args) in [1, 2],
+       do: enum_module?(mod)
 
   defp map_step?(_), do: false
 
   defp agg_step?({{:., _, [mod, fn_name]}, _, args})
-       when fn_name in @aggregators and is_list(args) and length(args) in [0, 1] do
-    enum_module?(mod)
-  end
+       when fn_name in @aggregators and is_list(args) and length(args) in [0, 1],
+       do: enum_module?(mod)
 
   defp agg_step?(_), do: false
 
   defp agg_fn_name({{:., _, [_, fn_name]}, _, _}), do: fn_name
 
-  defp extract_map_fn({{:., _, [_, :map]}, _, [_arg]} = step) do
-    {{:., _, [_, :map]}, _, [fn_ref]} = step
-    fn_ref
-  end
-
+  defp extract_map_fn({{:., _, [_, :map]}, _, [fn_ref]}), do: fn_ref
   defp extract_map_fn({{:., _, [_, :map]}, _, [_, fn_ref]}), do: fn_ref
 
   defp extract_map_source({{:., _, [_, :map]}, _, [source, _fn_ref]}), do: source
 
-  defp flatten_pipeline({:|>, _, [left, right]}) do
-    flatten_pipeline(left) ++ [right]
-  end
+  defp flatten_pipeline({:|>, _, [left, right]}),
+    do: flatten_pipeline(left) ++ [right]
 
   defp flatten_pipeline(expr), do: [expr]
 
   defp enum_module?({:__aliases__, _, [:Enum]}), do: true
   defp enum_module?(_), do: false
 
-  defp rebuild_pipeline([], reduce, []) do
-    reduce
-  end
+  # ── Pipeline rebuilding ─────────────────────────────────────────
+
+  defp rebuild_pipeline([], reduce, []), do: reduce
 
   defp rebuild_pipeline([], reduce, after_) do
-    Enum.reduce(after_, reduce, fn step, acc ->
-      {:|>, [], [acc, step]}
-    end)
+    Enum.reduce(after_, reduce, fn step, acc -> {:|>, [], [acc, step]} end)
   end
 
   defp rebuild_pipeline(before, reduce, after_) do
-    Enum.reduce(before, fn step, acc ->
-      {:|>, [], [acc, step]}
-    end)
+    Enum.reduce(before, fn step, acc -> {:|>, [], [acc, step]} end)
     |> then(fn pipeline ->
       Enum.reduce(after_, {:|>, [], [pipeline, reduce]}, fn step, acc ->
         {:|>, [], [acc, step]}
       end)
     end)
   end
+
+  # ── Issue building ──────────────────────────────────────────────
 
   defp build_issue(agg_fn, meta) do
     %Issue{
@@ -258,30 +321,15 @@ defmodule Credence.Rule.NoMapThenAggregate do
     }
   end
 
-  defp build_message(:max) do
-    """
-    `Enum.map/2` piped into `Enum.max/1` creates an intermediate list.
-    Fuse into a single pass:
+  defp build_message(:max),
+    do:
+      "`Enum.map/2` piped into `Enum.max/1` creates an intermediate list. Fuse into `Enum.reduce(enum, fn el, best -> max(f(el), best) end)`."
 
-        Enum.reduce(enumerable, fn x, best -> max(f.(x), best) end)
-    """
-  end
+  defp build_message(:min),
+    do:
+      "`Enum.map/2` piped into `Enum.min/1` creates an intermediate list. Fuse into `Enum.reduce(enum, fn el, best -> min(f(el), best) end)`."
 
-  defp build_message(:min) do
-    """
-    `Enum.map/2` piped into `Enum.min/1` creates an intermediate list.
-    Fuse into a single pass:
-
-        Enum.reduce(enumerable, fn x, best -> min(f.(x), best) end)
-    """
-  end
-
-  defp build_message(:sum) do
-    """
-    `Enum.map/2` piped into `Enum.sum/1` creates an intermediate list.
-    Fuse into a single pass:
-
-        Enum.reduce(enumerable, 0, fn x, acc -> acc + f.(x) end)
-    """
-  end
+  defp build_message(:sum),
+    do:
+      "`Enum.map/2` piped into `Enum.sum/1` creates an intermediate list. Fuse into `Enum.reduce(enum, 0, fn el, acc -> acc + f(el) end)`."
 end

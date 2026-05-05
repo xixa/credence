@@ -119,6 +119,7 @@ defmodule Credence.Rule.NoLengthComparisonForEmpty do
       line,
       fn _full, var, op, n_str ->
         n = String.to_integer(n_str)
+
         build_replacement(var, String.to_existing_atom(op), n) ||
           "length(#{var}) #{op} #{n}"
       end
@@ -132,6 +133,7 @@ defmodule Credence.Rule.NoLengthComparisonForEmpty do
       fn _full, n_str, op, var ->
         n = String.to_integer(n_str)
         rev = reverse_op(String.to_existing_atom(op))
+
         (rev && build_replacement(var, rev, n)) ||
           "#{n} #{op} length(#{var})"
       end

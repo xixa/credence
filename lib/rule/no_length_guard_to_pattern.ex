@@ -170,7 +170,9 @@ defmodule Credence.Rule.NoLengthGuardToPattern do
   # Compound guard: left and right — extract from either side
   defp extract_fixable_check({:and, _, [left, right]}) do
     case extract_fixable_check(left) do
-      {:ok, var, kind, nil} -> {:ok, var, kind, right}
+      {:ok, var, kind, nil} ->
+        {:ok, var, kind, right}
+
       _ ->
         case extract_fixable_check(right) do
           {:ok, var, kind, nil} -> {:ok, var, kind, left}

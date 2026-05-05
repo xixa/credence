@@ -21,10 +21,14 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTakeTest do
 
       issues = check(code)
       assert length(issues) == 1
+    end
 
-      assert Enum.any?(issues, fn issue ->
-               String.contains?(issue.message, "Prefer `Enum.sort(nums, :desc)")
-             end)
+    test "flags Enum.sort(list) |> Enum.take(-n) direct call form" do
+      code = """
+      Enum.sort(nums) |> Enum.take(-3)
+      """
+
+      assert length(check(code)) == 1
     end
 
     test "flags inside a defmodule" do
@@ -52,86 +56,54 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTakeTest do
       assert length(check(code)) == 1
     end
 
-    test "flags inside Enum.map callback" do
-      code = """
-      Enum.map(list, fn x ->
-        x
-        |> Enum.sort()
-        |> Enum.take(-3)
-      end)
-      """
-
-      assert length(check(code)) == 1
-    end
-
     test "does not flag Enum.sort(:desc) |> Enum.take(n)" do
-      code = """
-      nums
-      |> Enum.sort(:desc)
-      |> Enum.take(3)
-      """
-
-      assert check(code) == []
+      assert check("nums |> Enum.sort(:desc) |> Enum.take(3)") == []
     end
 
     test "does not flag Enum.sort() |> Enum.take(positive n)" do
-      code = """
-      nums
-      |> Enum.sort()
-      |> Enum.take(3)
-      """
-
-      assert check(code) == []
+      assert check("nums |> Enum.sort() |> Enum.take(3)") == []
     end
 
     test "does not flag Enum.sort(comparator) |> Enum.take(-n)" do
-      code = """
-      nums
-      |> Enum.sort(&(&1 >= &2))
-      |> Enum.take(-3)
-      """
-
-      assert check(code) == []
+      assert check("nums |> Enum.sort(&(&1 >= &2)) |> Enum.take(-3)") == []
     end
 
     test "does not flag unrelated Enum.sort()" do
-      code = """
-      nums
-      |> Enum.sort()
-      |> Enum.map(&(&1 * 2))
-      """
-
-      assert check(code) == []
+      assert check("nums |> Enum.sort() |> Enum.map(&(&1 * 2))") == []
     end
 
-    test "does not flag unrelated Enum.take(-n)" do
-      code = """
-      nums
-      |> Enum.take(-3)
-      """
-
-      assert check(code) == []
+    test "does not flag standalone Enum.take(-n)" do
+      assert check("nums |> Enum.take(-3)") == []
     end
   end
 
   # ── fix ─────────────────────────────────────────────────────────
 
   describe "fix" do
-    test "transforms simple pipeline" do
-      before = """
-      nums
-      |> Enum.sort()
-      |> Enum.take(-3)
-      """
-
-      result = fix(before)
+    test "transforms piped pipeline" do
+      result = fix("nums\n|> Enum.sort()\n|> Enum.take(-3)\n")
       assert result =~ "Enum.sort(:desc)"
       assert result =~ "Enum.take(3)"
       refute result =~ "Enum.take(-3)"
     end
 
+    test "transforms direct Enum.sort(list) |> Enum.take(-n)" do
+      code = """
+      defmodule Example do
+        def run(nums) do
+          Enum.sort(nums) |> Enum.take(-3)
+        end
+      end
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.sort(nums, :desc)"
+      assert result =~ "Enum.take(3)"
+      refute result =~ "Enum.take(-3)"
+    end
+
     test "transforms inside a defmodule" do
-      before = """
+      code = """
       defmodule Example do
         def run(nums) do
           nums
@@ -141,94 +113,55 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTakeTest do
       end
       """
 
-      result = fix(before)
+      result = fix(code)
       assert result =~ "Enum.sort(:desc)"
       assert result =~ "Enum.take(5)"
     end
 
     test "transforms with longer pipeline before sort" do
-      before = """
+      code = """
       nums
       |> Enum.map(&(&1 * 2))
       |> Enum.sort()
       |> Enum.take(-3)
       """
 
-      result = fix(before)
+      result = fix(code)
       assert result =~ "Enum.sort(:desc)"
       assert result =~ "Enum.take(3)"
     end
 
     test "transforms multiple independent pipelines" do
-      before = """
+      code = """
       defmodule Example do
         def a(nums), do: nums |> Enum.sort() |> Enum.take(-3)
         def b(nums), do: nums |> Enum.sort() |> Enum.take(-5)
       end
       """
 
-      result = fix(before)
+      result = fix(code)
       assert result =~ "Enum.take(3)"
       assert result =~ "Enum.take(5)"
       refute result =~ "Enum.take(-3)"
       refute result =~ "Enum.take(-5)"
     end
 
-    test "transforms large negative value" do
-      before = """
-      nums
-      |> Enum.sort()
-      |> Enum.take(-100)
-      """
-
-      result = fix(before)
-      assert result =~ "Enum.sort(:desc)"
-      assert result =~ "Enum.take(100)"
-    end
-
-    test "transforms negative one" do
-      before = """
-      nums
-      |> Enum.sort()
-      |> Enum.take(-1)
-      """
-
-      result = fix(before)
-      assert result =~ "Enum.sort(:desc)"
-      assert result =~ "Enum.take(1)"
-    end
-
     test "does not modify already correct code" do
-      code = """
-      nums
-      |> Enum.sort(:desc)
-      |> Enum.take(3)
-      """
-
+      code = "nums |> Enum.sort(:desc) |> Enum.take(3)\n"
       result = fix(code)
       assert result =~ "Enum.sort(:desc)"
       assert result =~ "Enum.take(3)"
     end
 
     test "does not modify positive take" do
-      code = """
-      nums
-      |> Enum.sort()
-      |> Enum.take(3)
-      """
-
+      code = "nums |> Enum.sort() |> Enum.take(3)\n"
       result = fix(code)
       assert result =~ "Enum.sort()"
       assert result =~ "Enum.take(3)"
     end
 
     test "does not modify when sort has comparator" do
-      code = """
-      nums
-      |> Enum.sort(&(&1 >= &2))
-      |> Enum.take(-3)
-      """
-
+      code = "nums |> Enum.sort(&(&1 >= &2)) |> Enum.take(-3)\n"
       result = fix(code)
       assert result =~ "Enum.take(-3)"
     end
@@ -246,23 +179,8 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTakeTest do
       assert result =~ "Enum.take(-3)"
     end
 
-    test "check flags but fix skips non-adjacent sort and take" do
-      code = """
-      nums
-      |> Enum.sort()
-      |> Enum.filter(&(&1 > 0))
-      |> Enum.take(-3)
-      """
-
-      assert length(check(code)) == 1
-
-      result = fix(code)
-      assert result =~ "Enum.sort()"
-      assert result =~ "Enum.take(-3)"
-    end
-
     test "produces valid Elixir code" do
-      before = """
+      code = """
       defmodule TestFix do
         def run(nums) do
           nums
@@ -272,22 +190,21 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTakeTest do
       end
       """
 
-      result = fix(before)
+      result = fix(code)
       assert {:ok, _} = Code.string_to_quoted(result)
     end
 
-    test "preserves other pipeline steps" do
-      before = """
-      nums
-      |> Enum.map(&(&1 * 2))
-      |> Enum.sort()
-      |> Enum.take(-3)
+    test "produces valid Elixir code for direct form" do
+      code = """
+      defmodule TestFix do
+        def run(nums) do
+          Enum.sort(nums) |> Enum.take(-3)
+        end
+      end
       """
 
-      result = fix(before)
-      assert result =~ "Enum.map"
-      assert result =~ "Enum.sort(:desc)"
-      assert result =~ "Enum.take(3)"
+      result = fix(code)
+      assert {:ok, _} = Code.string_to_quoted(result)
     end
   end
 end

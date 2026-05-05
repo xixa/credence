@@ -10,11 +10,15 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTake do
       |> Enum.sort()
       |> Enum.take(-3)
 
+      Enum.sort(nums) |> Enum.take(-3)
+
   ## Good
 
       nums
       |> Enum.sort(:desc)
       |> Enum.take(3)
+
+      Enum.sort(nums, :desc) |> Enum.take(3)
   """
   use Credence.Rule
   alias Credence.Issue
@@ -70,9 +74,18 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTake do
 
   defp transform_pipeline(node), do: transform_step(node)
 
-  # Enum.sort() → Enum.sort(:desc)
+  # Enum.sort() → Enum.sort(:desc)  (piped, 0 args)
   defp transform_step({{:., dm, [{:__aliases__, am, [:Enum]}, :sort]}, cm, []}) do
     {{:., dm, [{:__aliases__, am, [:Enum]}, :sort]}, cm, [wrap_literal(:desc)]}
+  end
+
+  # Enum.sort(list) → Enum.sort(list, :desc)  (direct call, 1 arg that isn't a direction)
+  defp transform_step({{:., dm, [{:__aliases__, am, [:Enum]}, :sort]}, cm, [arg]} = node) do
+    if sort_direction_or_comparator?(arg) do
+      node
+    else
+      {{:., dm, [{:__aliases__, am, [:Enum]}, :sort]}, cm, [arg, wrap_literal(:desc)]}
+    end
   end
 
   # Enum.take(-n) → Enum.take(n)
@@ -88,10 +101,29 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTake do
 
   defp transform_step(node), do: node
 
+  # ── Sort direction / comparator detection ───────────────────────
+
+  defp sort_direction_or_comparator?(:asc), do: true
+  defp sort_direction_or_comparator?(:desc), do: true
+  defp sort_direction_or_comparator?({:__block__, _, [:asc]}), do: true
+  defp sort_direction_or_comparator?({:__block__, _, [:desc]}), do: true
+  defp sort_direction_or_comparator?({:fn, _, _}), do: true
+  defp sort_direction_or_comparator?({:&, _, _}), do: true
+  defp sort_direction_or_comparator?(_), do: false
+
+  # ── Plain sort detection ────────────────────────────────────────
+  # "Plain sort" = default ascending, either piped (0 args) or direct (1 list arg)
+
+  defp plain_sort_args?([]), do: true
+  defp plain_sort_args?([arg]), do: not sort_direction_or_comparator?(arg)
+  defp plain_sort_args?(_), do: false
+
+  defp plain_sort?({{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, args}),
+    do: plain_sort_args?(args)
+
+  defp plain_sort?(_), do: false
+
   # ── Literal wrapping ───────────────────────────────────────────
-  # Sourceror.to_string/1 → Code.Formatter requires __block__ nodes
-  # to carry a :token key in their metadata so the formatter knows
-  # how to render the literal.
 
   defp wrap_literal(atom) when is_atom(atom),
     do: {:__block__, [token: inspect(atom)], [atom]}
@@ -99,7 +131,7 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTake do
   defp wrap_literal(int) when is_integer(int),
     do: {:__block__, [token: Integer.to_string(int)], [int]}
 
-  # ── Integer extraction (handles Sourceror's __block__ wrapper) ──
+  # ── Integer extraction ──────────────────────────────────────────
 
   defp positive_value({:-, _, [int]}) when is_integer(int), do: {:ok, int}
 
@@ -122,9 +154,6 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTake do
     end)
   end
 
-  defp plain_sort?({{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, args}), do: args == []
-  defp plain_sort?(_), do: false
-
   defp negative_take?({{:., _, [{:__aliases__, _, [:Enum]}, :take]}, _, [n]}),
     do: negative_integer?(n)
 
@@ -132,19 +161,17 @@ defmodule Credence.Rule.PreferDescSortOverNegativeTake do
 
   # ── Shared pipeline helpers ─────────────────────────────────────
 
-  defp flatten_pipeline({:|>, _, [left, right]}) do
-    flatten_pipeline(left) ++ [right]
-  end
+  defp flatten_pipeline({:|>, _, [left, right]}),
+    do: flatten_pipeline(left) ++ [right]
 
   defp flatten_pipeline(other), do: [other]
 
-  defp match_pattern?(pipeline) do
-    has_plain_sort?(pipeline) and has_negative_take?(pipeline)
-  end
+  defp match_pattern?(pipeline),
+    do: has_plain_sort?(pipeline) and has_negative_take?(pipeline)
 
   defp has_plain_sort?(pipeline) do
     Enum.any?(pipeline, fn
-      {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, args} -> args == []
+      {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, args} -> plain_sort_args?(args)
       _ -> false
     end)
   end

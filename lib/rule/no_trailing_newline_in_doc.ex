@@ -22,8 +22,8 @@ defmodule Credence.Rule.NoTrailingNewlineInDoc do
 
   ## Auto-fix
 
-  Strips trailing `\\n` escape sequences from single-line doc strings.
-  Heredoc-style docs (`\"\"\"...\"\"\"`) are not modified.
+  Strips trailing `\\n` from single-line doc strings (strings where the
+  only newlines are trailing). Heredoc-style docs are not modified.
   """
 
   use Credence.Rule
@@ -33,6 +33,8 @@ defmodule Credence.Rule.NoTrailingNewlineInDoc do
 
   @impl true
   def fixable?, do: true
+
+  # ── Check (Code.string_to_quoted AST — escapes resolved) ───────
 
   @impl true
   def check(ast, _opts) do
@@ -53,59 +55,97 @@ defmodule Credence.Rule.NoTrailingNewlineInDoc do
     Enum.reverse(issues)
   end
 
+  # ── Fix (Sourceror AST — escapes may be raw OR resolved) ───────
+
   @impl true
   def fix(source, _opts) do
-    source
-    |> String.split("\n")
-    |> Enum.map(fn line ->
-      if doc_line_with_trailing_newline?(line) do
-        strip_trailing_newline(line)
+    ast = Sourceror.parse_string!(source)
+
+    if has_fixable_doc?(ast) do
+      fixed_ast = Macro.postwalk(ast, &fix_node/1)
+      result = Sourceror.to_string(fixed_ast)
+
+      if String.ends_with?(source, "\n") and not String.ends_with?(result, "\n") do
+        result <> "\n"
       else
-        line
+        result
       end
-    end)
-    |> Enum.join("\n")
+    else
+      source
+    end
   end
 
-  # A string has the pattern if it ends with \n (actual newline character)
-  # but has no other internal newlines. This distinguishes single-line
-  # @doc "text\n" from heredoc @doc """\ntext\n""" which typically has
-  # multi-line content.
-  defp trailing_newline_only?(value) do
+  defp fix_node({:@, meta, [{attr, attr_meta, [{:__block__, str_meta, [value]}]}]} = node)
+       when attr in @doc_attrs and is_binary(value) do
+    case strip_trailing_doc_newline(value) do
+      {:ok, cleaned} ->
+        {:@, meta, [{attr, attr_meta, [{:__block__, str_meta, [cleaned]}]}]}
+
+      :skip ->
+        node
+    end
+  end
+
+  defp fix_node(node), do: node
+
+  # ── Pre-check ───────────────────────────────────────────────────
+
+  defp has_fixable_doc?(ast) do
+    {_ast, found} =
+      Macro.prewalk(ast, false, fn
+        {:@, _, [{attr, _, [{:__block__, _, [value]}]}]} = node, acc
+        when attr in @doc_attrs and is_binary(value) ->
+          {node, acc or fixable_value?(value)}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    found
+  end
+
+  # ── Value analysis and stripping ────────────────────────────────
+  #
+  # Sourceror preserves raw escape sequences in string values when
+  # parsing fresh source: "text\n" → value is "text\\n" (backslash + n).
+  #
+  # But when an earlier rule's Sourceror.to_string() has already run,
+  # it may unescaped \n into a real newline, so re-parsing produces
+  # a value with an actual newline character.
+  #
+  # We handle both forms.
+
+  defp fixable_value?(value) do
+    raw_trailing_only?(value) or real_trailing_only?(value)
+  end
+
+  defp strip_trailing_doc_newline(value) do
+    cond do
+      raw_trailing_only?(value) ->
+        {:ok, String.trim_trailing(value, "\\n")}
+
+      real_trailing_only?(value) ->
+        {:ok, String.trim_trailing(value, "\n")}
+
+      true ->
+        :skip
+    end
+  end
+
+  # Raw form: value ends with literal backslash + n (Sourceror on fresh source)
+  defp raw_trailing_only?(value) do
+    String.ends_with?(value, "\\n") and
+      not String.contains?(String.trim_trailing(value, "\\n"), "\\n")
+  end
+
+  # Resolved form: value ends with newline character (Sourceror on reformatted source)
+  defp real_trailing_only?(value) do
     String.ends_with?(value, "\n") and
       not String.contains?(String.trim_trailing(value, "\n"), "\n")
   end
 
-  # Checks if a source line is a single-line @doc/@moduledoc/@typedoc string
-  # that ends with a literal \n before the closing quote.
-  defp doc_line_with_trailing_newline?(line) do
-    trimmed = String.trim(line)
-
-    starts_with_doc_string?(trimmed) and
-      Regex.match?(~r/(\\n)+"\s*$/, line) and
-      not has_internal_escaped_newlines?(line)
-  end
-
-  defp starts_with_doc_string?(trimmed) do
-    String.starts_with?(trimmed, "@doc \"") or
-      String.starts_with?(trimmed, "@moduledoc \"") or
-      String.starts_with?(trimmed, "@typedoc \"")
-  end
-
-  # After stripping the trailing \n sequences, check if any literal \n
-  # remains — if so, the string has internal newlines (multi-line content)
-  # and should not be auto-fixed.
-  defp has_internal_escaped_newlines?(line) do
-    stripped = Regex.replace(~r/(\\n)+"\s*$/, line, "\"")
-    String.contains?(stripped, "\\n")
-  end
-
-  # Strips literal \n (the two source characters backslash + n) before the
-  # closing double-quote at end of line. Only matches single-line string
-  # syntax — heredocs won't match this pattern.
-  defp strip_trailing_newline(line) do
-    Regex.replace(~r/(\\n)+"\s*$/, line, "\"")
-  end
+  # For check (Code.string_to_quoted — always resolved)
+  defp trailing_newline_only?(value), do: real_trailing_only?(value)
 
   defp build_issue(meta, attr) do
     %Issue{

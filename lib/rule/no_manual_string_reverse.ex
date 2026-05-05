@@ -150,10 +150,19 @@ defmodule Credence.Rule.NoManualStringReverse do
     {{:., [], [{:__aliases__, [], [:String]}, :reverse]}, [], [subject]}
   end
 
-  # Only safe to auto-fix when Enum.join has no explicit separator argument.
-  # A separator would change semantics (e.g. Enum.join(list, "-") ≠ String.reverse).
+  # Safe to auto-fix when Enum.join has no separator or an empty-string
+  # separator (which is the default). A non-empty separator would change
+  # semantics (e.g. Enum.join(list, "-") ≠ String.reverse).
   defp join_no_separator?({{:., _, [{:__aliases__, _, [:Enum]}, :join]}, _, []}), do: true
+
+  defp join_no_separator?({{:., _, [{:__aliases__, _, [:Enum]}, :join]}, _, [sep]}),
+    do: empty_string_literal?(sep)
+
   defp join_no_separator?(_), do: false
+
+  defp empty_string_literal?(""), do: true
+  defp empty_string_literal?({:__block__, _, [""]}), do: true
+  defp empty_string_literal?(_), do: false
 
   defp rightmost({:|>, _, [_, right]}), do: right
   defp rightmost(other), do: other

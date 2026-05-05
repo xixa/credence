@@ -42,8 +42,7 @@ defmodule Credence.Rule.NoKernelOpInPipeline do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        {:|>, _, [_lhs, {{:., _, [{:__aliases__, _, [:Kernel]}, op]}, meta, [_arg]}]} = node,
-        acc
+        {:|>, _, [_lhs, {{:., _, [{:__aliases__, _, [:Kernel]}, op]}, meta, [_arg]}]} = node, acc
         when op in @flagged_ops ->
           {node, [build_issue(meta, op) | acc]}
 
@@ -61,8 +60,7 @@ defmodule Credence.Rule.NoKernelOpInPipeline do
     if has_flagged_kernel_op?(ast) do
       ast
       |> Macro.postwalk(fn
-        {:|>, _meta,
-         [lhs, {{:., _, [{:__aliases__, _, [:Kernel]}, op]}, _, [arg]}]}
+        {:|>, _meta, [lhs, {{:., _, [{:__aliases__, _, [:Kernel]}, op]}, _, [arg]}]}
         when op in @flagged_ops ->
           transform_kernel_pipe(lhs, op, arg)
 
@@ -78,8 +76,7 @@ defmodule Credence.Rule.NoKernelOpInPipeline do
   defp has_flagged_kernel_op?(ast) do
     {_ast, found?} =
       Macro.prewalk(ast, false, fn
-        {:|>, _, [_lhs, {{:., _, [{:__aliases__, _, [:Kernel]}, op]}, _, [_arg]}]} = node,
-        _acc
+        {:|>, _, [_lhs, {{:., _, [{:__aliases__, _, [:Kernel]}, op]}, _, [_arg]}]} = node, _acc
         when op in @flagged_ops ->
           {node, true}
 

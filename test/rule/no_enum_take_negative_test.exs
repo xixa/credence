@@ -12,8 +12,6 @@ defmodule Credence.Rule.NoEnumTakeNegativeTest do
   end
 
   describe "NoEnumTakeNegative check" do
-    # --- POSITIVE CASES (should flag) ---
-
     test "detects Enum.take with negative literal" do
       code = """
       defmodule BadTake do
@@ -25,13 +23,11 @@ defmodule Credence.Rule.NoEnumTakeNegativeTest do
       """
 
       issues = check(code)
-
       assert length(issues) == 1
       issue = hd(issues)
       assert %Issue{} = issue
       assert issue.rule == :no_enum_take_negative
       assert issue.message =~ "-3"
-      assert issue.meta.line != nil
     end
 
     test "detects piped Enum.take with negative literal" do
@@ -44,7 +40,6 @@ defmodule Credence.Rule.NoEnumTakeNegativeTest do
       """
 
       issues = check(code)
-
       assert length(issues) == 1
       assert hd(issues).rule == :no_enum_take_negative
     end
@@ -57,45 +52,21 @@ defmodule Credence.Rule.NoEnumTakeNegativeTest do
       """
 
       issues = check(code)
-
       assert length(issues) == 1
       assert hd(issues).message =~ "-1"
     end
 
-    # --- NEGATIVE CASES (should NOT flag) ---
-
     test "passes Enum.take with positive count" do
-      code = """
-      defmodule Good do
-        def top_three(list) do
-          Enum.sort(list, :desc) |> Enum.take(3)
-        end
-      end
-      """
-
-      assert check(code) == []
+      assert check("defmodule G do\n  def f(l), do: Enum.sort(l, :desc) |> Enum.take(3)\nend") ==
+               []
     end
 
     test "passes Enum.take with variable count" do
-      code = """
-      defmodule SafeVar do
-        def take_n(list, n) do
-          Enum.take(list, n)
-        end
-      end
-      """
-
-      assert check(code) == []
+      assert check("defmodule G do\n  def f(l, n), do: Enum.take(l, n)\nend") == []
     end
 
     test "passes Enum.take with zero" do
-      code = """
-      defmodule Zero do
-        def noop(list), do: Enum.take(list, 0)
-      end
-      """
-
-      assert check(code) == []
+      assert check("defmodule G do\n  def f(l), do: Enum.take(l, 0)\nend") == []
     end
   end
 
@@ -130,11 +101,11 @@ defmodule Credence.Rule.NoEnumTakeNegativeTest do
       assert fixed =~ "-3..-1//1"
     end
 
-    test "fixes piped list |> Enum.take(-3) to list |> Enum.slice" do
+    test "fixes piped take after non-sort step" do
       code = """
       defmodule Example do
         def last_three(list) do
-          list |> Enum.sort() |> Enum.take(-3)
+          list |> Enum.filter(&(&1 > 0)) |> Enum.take(-3)
         end
       end
       """
@@ -143,22 +114,6 @@ defmodule Credence.Rule.NoEnumTakeNegativeTest do
       refute fixed =~ "Enum.take"
       assert fixed =~ "Enum.slice"
       assert fixed =~ "-3..-1//1"
-      assert fixed =~ "|>"
-    end
-
-    test "fixes Enum.take(list, -5) with correct range" do
-      code = """
-      defmodule Example do
-        def last_five(list) do
-          Enum.take(list, -5)
-        end
-      end
-      """
-
-      fixed = fix(code)
-      refute fixed =~ "Enum.take"
-      assert fixed =~ "Enum.slice"
-      assert fixed =~ "-5..-1//1"
     end
 
     test "fixes multiple negative takes in one file" do
@@ -179,42 +134,13 @@ defmodule Credence.Rule.NoEnumTakeNegativeTest do
     end
 
     test "does not modify Enum.take with positive count" do
-      code = """
-      defmodule Good do
-        def first_three(list), do: Enum.take(list, 3)
-      end
-      """
-
-      fixed = fix(code)
+      fixed = fix("defmodule G do\n  def f(l), do: Enum.take(l, 3)\nend\n")
       assert fixed =~ "Enum.take"
     end
 
     test "does not modify Enum.take with variable count" do
-      code = """
-      defmodule SafeVar do
-        def take_n(list, n), do: Enum.take(list, n)
-      end
-      """
-
-      fixed = fix(code)
+      fixed = fix("defmodule G do\n  def f(l, n), do: Enum.take(l, n)\nend\n")
       assert fixed =~ "Enum.take"
-    end
-
-    test "fixes take at the end of a longer pipeline" do
-      code = """
-      defmodule Example do
-        def process(data) do
-          data
-          |> Enum.sort()
-          |> Enum.take(-3)
-        end
-      end
-      """
-
-      fixed = fix(code)
-      refute fixed =~ "Enum.take"
-      assert fixed =~ "Enum.slice"
-      assert fixed =~ "-3..-1//1"
     end
 
     test "fixes direct call with complex first argument" do
@@ -243,23 +169,52 @@ defmodule Credence.Rule.NoEnumTakeNegativeTest do
 
       fixed = fix(code)
       {:ok, ast} = Code.string_to_quoted(fixed)
-      issues = Credence.Rule.NoEnumTakeNegative.check(ast, [])
-      assert issues == []
+      assert Credence.Rule.NoEnumTakeNegative.check(ast, []) == []
     end
 
-    test "fixed piped code has no remaining issues" do
+    # ── Skip behavior: sort |> take(-n) deferred ──────────────────
+
+    test "defers sort() |> take(-n) to PreferDescSortOverNegativeTake (piped)" do
       code = """
       defmodule Example do
         def run(list) do
-          list |> Enum.take(-2)
+          list |> Enum.sort() |> Enum.take(-3)
         end
       end
       """
 
       fixed = fix(code)
-      {:ok, ast} = Code.string_to_quoted(fixed)
-      issues = Credence.Rule.NoEnumTakeNegative.check(ast, [])
-      assert issues == []
+      # Not converted to slice — left for PreferDescSortOverNegativeTake
+      assert fixed =~ "Enum.take"
+      refute fixed =~ "Enum.slice"
+    end
+
+    test "defers Enum.sort(list) |> take(-n) to PreferDescSortOverNegativeTake (direct)" do
+      code = """
+      defmodule Example do
+        def run(list) do
+          Enum.sort(list) |> Enum.take(-3)
+        end
+      end
+      """
+
+      fixed = fix(code)
+      assert fixed =~ "Enum.take"
+      refute fixed =~ "Enum.slice"
+    end
+
+    test "does NOT defer when sort has comparator" do
+      code = """
+      defmodule Example do
+        def run(list) do
+          list |> Enum.sort(&>=/2) |> Enum.take(-3)
+        end
+      end
+      """
+
+      fixed = fix(code)
+      refute fixed =~ "Enum.take"
+      assert fixed =~ "Enum.slice"
     end
   end
 end

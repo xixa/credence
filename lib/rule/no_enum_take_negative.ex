@@ -5,23 +5,11 @@ defmodule Credence.Rule.NoEnumTakeNegative do
 
   For linked lists, `Enum.take(list, -n)` must internally determine the list
   length, then traverse again to the cut point — effectively two full
-  traversals. If the list was just sorted, sorting in the opposite direction
-  and taking a positive count is more efficient.
+  traversals.
 
-  The auto-fix replaces `Enum.take(list, -n)` with `Enum.slice(list, -n..-1//1)`,
-  which has equivalent semantics and makes the tail-access explicit.
-
-  ## Bad
-
-      sorted = Enum.sort(nums)
-      top_three = Enum.take(sorted, -3)
-
-  ## Good
-
-      top_three = Enum.sort(nums, :desc) |> Enum.take(3)
-
-      # Or use Enum.slice/2 to be explicit about the range:
-      Enum.slice(sorted, -3..-1//1)
+  The auto-fix replaces `Enum.take(list, -n)` with `Enum.slice(list, -n..-1//1)`.
+  When `Enum.take(-n)` directly follows `Enum.sort()` in a pipeline, the fix
+  defers to `PreferDescSortOverNegativeTake`.
   """
   use Credence.Rule
   alias Credence.Issue
@@ -33,12 +21,10 @@ defmodule Credence.Rule.NoEnumTakeNegative do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Direct: Enum.take(list, -3)
         {{:., _, [{:__aliases__, _, [:Enum]}, :take]}, meta, [_, {:-, _, [n]}]} = node, issues
         when is_integer(n) and n > 0 ->
           {node, [build_issue(n, meta) | issues]}
 
-        # Piped: list |> Enum.take(-3)
         {{:., _, [{:__aliases__, _, [:Enum]}, :take]}, meta, [{:-, _, [n]}]} = node, issues
         when is_integer(n) and n > 0 ->
           {node, [build_issue(n, meta) | issues]}
@@ -52,21 +38,29 @@ defmodule Credence.Rule.NoEnumTakeNegative do
 
   @impl true
   def fix(source, _opts) do
-    source
-    |> Sourceror.parse_string!()
+    ast = Sourceror.parse_string!(source)
+    skip = sort_take_lines(ast)
+
+    ast
     |> Macro.postwalk(fn
-      # Direct: Enum.take(list, -n)
-      {{:., _, [{:__aliases__, _, [:Enum]}, :take]}, _, [list_arg, second]} = node ->
-        case extract_negative(second) do
-          {:ok, n} -> enum_slice_call(list_arg, n)
-          :error -> node
+      {{:., meta, [{:__aliases__, _, [:Enum]}, :take]}, _, [list_arg, second]} = node ->
+        if Keyword.get(meta, :line) in skip do
+          node
+        else
+          case extract_negative(second) do
+            {:ok, n} -> enum_slice_call(list_arg, n)
+            :error -> node
+          end
         end
 
-      # Piped: |> Enum.take(-n)
-      {{:., _, [{:__aliases__, _, [:Enum]}, :take]}, _, [single]} = node ->
-        case extract_negative(single) do
-          {:ok, n} -> enum_slice_piped(n)
-          :error -> node
+      {{:., meta, [{:__aliases__, _, [:Enum]}, :take]}, _, [single]} = node ->
+        if Keyword.get(meta, :line) in skip do
+          node
+        else
+          case extract_negative(single) do
+            {:ok, n} -> enum_slice_piped(n)
+            :error -> node
+          end
         end
 
       node ->
@@ -75,37 +69,69 @@ defmodule Credence.Rule.NoEnumTakeNegative do
     |> Sourceror.to_string()
   end
 
-  # Sourceror wraps literals in {:__block__, meta, [value]}, so -1 becomes:
-  #   {:-, meta, [{:__block__, meta, [1]}]}
-  # Code.string_to_quoted produces the simpler:
-  #   {:-, meta, [1]}
-  # We handle both, plus a bare negative integer just in case.
+  # ── Skip-detection ──────────────────────────────────────────────
+
+  defp sort_take_lines(ast) do
+    {_ast, lines} =
+      Macro.prewalk(ast, MapSet.new(), fn
+        {:|>, _, [lhs, {{:., meta, [{:__aliases__, _, [:Enum]}, :take]}, _, args}]} = node, acc ->
+          if pipe_ends_with_plain_sort?(lhs) and negative_take_args?(args) do
+            {node, MapSet.put(acc, Keyword.get(meta, :line))}
+          else
+            {node, acc}
+          end
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    lines
+  end
+
+  # Handle both Code.string_to_quoted (bare int) and Sourceror (__block__-wrapped)
+  defp negative_take_args?([{:-, _, [n]}]) when is_integer(n) and n > 0, do: true
+  defp negative_take_args?([{:-, _, [{:__block__, _, [n]}]}]) when is_integer(n) and n > 0, do: true
+  defp negative_take_args?([_, {:-, _, [n]}]) when is_integer(n) and n > 0, do: true
+  defp negative_take_args?([_, {:-, _, [{:__block__, _, [n]}]}]) when is_integer(n) and n > 0, do: true
+  defp negative_take_args?(_), do: false
+
+  # "Plain sort" = Enum.sort() with 0 args OR Enum.sort(list) with 1 non-direction arg
+  defp pipe_ends_with_plain_sort?({{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, args}),
+    do: plain_sort_args?(args)
+
+  defp pipe_ends_with_plain_sort?({:|>, _, [_lhs, rhs]}),
+    do: pipe_ends_with_plain_sort?(rhs)
+
+  defp pipe_ends_with_plain_sort?(_), do: false
+
+  defp plain_sort_args?([]), do: true
+  defp plain_sort_args?([arg]), do: not sort_direction_or_comparator?(arg)
+  defp plain_sort_args?(_), do: false
+
+  defp sort_direction_or_comparator?(:asc), do: true
+  defp sort_direction_or_comparator?(:desc), do: true
+  defp sort_direction_or_comparator?({:__block__, _, [:asc]}), do: true
+  defp sort_direction_or_comparator?({:__block__, _, [:desc]}), do: true
+  defp sort_direction_or_comparator?({:fn, _, _}), do: true
+  defp sort_direction_or_comparator?({:&, _, _}), do: true
+  defp sort_direction_or_comparator?(_), do: false
+
+  # ── Helpers ─────────────────────────────────────────────────────
+
   defp extract_negative({:-, _, [{:__block__, _, [n]}]}) when is_integer(n) and n > 0,
     do: {:ok, n}
 
-  defp extract_negative({:-, _, [n]}) when is_integer(n) and n > 0,
-    do: {:ok, n}
-
-  defp extract_negative(n) when is_integer(n) and n < 0,
-    do: {:ok, abs(n)}
-
+  defp extract_negative({:-, _, [n]}) when is_integer(n) and n > 0, do: {:ok, n}
+  defp extract_negative(n) when is_integer(n) and n < 0, do: {:ok, abs(n)}
   defp extract_negative(_), do: :error
 
-  # Enum.slice(list_arg, -n..-1//1)
-  defp enum_slice_call(list_arg, n) do
-    {{:., [], [{:__aliases__, [], [:Enum]}, :slice]}, [], [list_arg, build_range(n)]}
-  end
+  defp enum_slice_call(list_arg, n),
+    do: {{:., [], [{:__aliases__, [], [:Enum]}, :slice]}, [], [list_arg, build_range(n)]}
 
-  # Enum.slice(-n..-1//1) — for piped usage
-  defp enum_slice_piped(n) do
-    {{:., [], [{:__aliases__, [], [:Enum]}, :slice]}, [], [build_range(n)]}
-  end
+  defp enum_slice_piped(n),
+    do: {{:., [], [{:__aliases__, [], [:Enum]}, :slice]}, [], [build_range(n)]}
 
-  # Builds AST for -n..-1//1
-  # The :..// operator takes three flat args: start, end, step
-  defp build_range(n) do
-    {:..//, [], [-n, -1, 1]}
-  end
+  defp build_range(n), do: {:..//, [], [-n, -1, 1]}
 
   defp build_issue(n, meta) do
     %Issue{

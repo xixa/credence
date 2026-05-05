@@ -1017,6 +1017,10 @@ defmodule CredenceTest do
     end
   end
 
+  # ═══════════════════════════════════════════════════════════════════
+  # FIX TESTS
+  # ═══════════════════════════════════════════════════════════════════
+
   describe "fix works" do
     test "applies fixable rules and reports remaining issues" do
       input = """
@@ -1052,6 +1056,178 @@ defmodule CredenceTest do
       refute result.code =~ "@doc false"
       # But the bad name `y` still shows up as an issue
       assert Enum.any?(result.issues, &(&1.rule == :descriptive_names))
+    end
+  end
+
+  describe "fix integration — multi-rule showcase" do
+    @showcase_input """
+    defmodule Solution do
+      @moduledoc "Provides text analysis utilities for processing and analyzing strings.\\n"
+      @doc "Analyzes the given text and returns a map of statistics.\\n\\nReturns word count, character count, average word length,\\nfrequency map, and other derived metrics.\\n"
+      @spec analyze(String.t()) :: map()
+      def analyze(text) do
+        words = String.split(text)
+
+        if length(words) == 0 do
+          %{words: 0, chars: 0, avg_length: 0.0}
+        else
+          char_count = String.graphemes(text) |> length()
+
+          total_length = Enum.map(words, fn w -> String.length(w) end) |> Enum.sum()
+          avg_length = total_length / Enum.count(words) * 1.0
+
+          frequencies = Enum.reduce(words, %{}, fn word, acc ->
+            Map.update(acc, String.downcase(word), 1, &(&1 + 1))
+          end)
+
+          sorted_desc = Enum.sort(words) |> Enum.reverse()
+          top_3 = Enum.sort(words) |> Enum.take(-3)
+
+          last = Enum.at(sorted_desc, -1)
+          second_last = Enum.at(sorted_desc, -2)
+
+          unique_words = words |> Enum.uniq_by(fn w -> w end)
+          unique_csv = Enum.map(unique_words, fn w -> String.upcase(w) end) |> Enum.join(",")
+
+          %{
+            char_count: char_count,
+            avg_length: avg_length,
+            frequencies: frequencies,
+            top_3: top_3,
+            last: last,
+            second_last: second_last,
+            unique_csv: unique_csv,
+            palindrome: is_palindrome(text)
+          }
+        end
+      end
+
+      def is_palindrome(text) do
+        cleaned = text |> String.downcase() |> String.replace(~r/[^a-z0-9]/, "")
+        reversed = String.graphemes(cleaned) |> Enum.reverse() |> Enum.join("")
+        cleaned |> Kernel.==(reversed)
+      end
+
+      @doc false
+      defp normalize_words([], acc), do: Enum.reverse(acc)
+      defp normalize_words([h | t], acc), do: normalize_words(t, acc ++ [String.downcase(h)])
+    end
+    """
+
+    setup do
+      %{result: Credence.fix(@showcase_input, [])}
+    end
+
+    # ─── NoLengthComparisonForEmpty ─────────────────────────────────
+
+    test "replaces length(words) == 0 with words == []", %{result: %{code: code}} do
+      assert code =~ "words == []"
+      refute code =~ "length(words) == 0"
+    end
+
+    # ─── AvoidGraphemesLength ───────────────────────────────────────
+
+    test "replaces String.graphemes |> length with String.length", %{result: %{code: code}} do
+      assert code =~ "String.length(text)"
+      refute code =~ "String.graphemes(text) |> length()"
+    end
+
+    # ─── NoEnumCountForLength ───────────────────────────────────────
+
+    test "replaces Enum.count(words) with length(words)", %{result: %{code: code}} do
+      assert code =~ "length(words)"
+      refute code =~ "Enum.count(words)"
+    end
+
+    # ─── NoMultiplyByOnePointZero ───────────────────────────────────
+
+    test "removes * 1.0", %{result: %{code: code}} do
+      refute code =~ "* 1.0"
+    end
+
+    # ─── NoManualFrequencies ────────────────────────────────────────
+
+    test "replaces manual frequency reduce with Enum.frequencies", %{result: %{code: code}} do
+      assert code =~ "Enum.frequencies"
+      refute code =~ "Map.update(acc"
+    end
+
+    # ─── NoSortThenReverse ──────────────────────────────────────────
+
+    test "replaces Enum.sort |> Enum.reverse with Enum.sort(:desc)", %{result: %{code: code}} do
+      assert code =~ "Enum.sort(words, :desc)"
+      refute code =~ "Enum.sort(words) |> Enum.reverse()"
+    end
+
+    # ─── NoEnumAtNegativeIndex ──────────────────────────────────────
+
+    test "groups negative Enum.at calls into reverse + pattern match",
+         %{result: %{code: code}} do
+      assert code =~ "Enum.reverse(sorted_desc)"
+      assert code =~ "[last, second_last | _]"
+      refute code =~ "Enum.at(sorted_desc, -1)"
+      refute code =~ "Enum.at(sorted_desc, -2)"
+    end
+
+    # ─── NoIdentityFunctionInEnum ───────────────────────────────────
+
+    test "simplifies Enum.uniq_by(fn w -> w end) to Enum.uniq()", %{result: %{code: code}} do
+      assert code =~ "Enum.uniq()"
+      refute code =~ "Enum.uniq_by"
+    end
+
+    # ─── UseMapJoin ─────────────────────────────────────────────────
+
+    test "replaces Enum.map |> Enum.join with Enum.map_join", %{result: %{code: code}} do
+      assert code =~ "Enum.map_join"
+      refute Regex.match?(~r/Enum\.map\(.*\) \|> Enum\.join/, code)
+    end
+
+    # ─── NoIsPrefixForNonGuard ──────────────────────────────────────
+
+    test "renames is_palindrome to palindrome? in def and call site",
+         %{result: %{code: code}} do
+      assert code =~ "def palindrome?(text)"
+      assert code =~ "palindrome?(text)"
+      refute code =~ "is_palindrome"
+    end
+
+    # ─── NoKernelOpInPipeline ───────────────────────────────────────
+
+    test "extracts Kernel.== from pipeline to infix", %{result: %{code: code}} do
+      assert code =~ "cleaned == reversed"
+      refute code =~ "Kernel.=="
+    end
+
+    # ─── NoDocFalseOnPrivate ────────────────────────────────────────
+
+    test "removes @doc false on private function", %{result: %{code: code}} do
+      refute code =~ "@doc false"
+    end
+
+    # ─── NoRedundantEnumJoinSeparator ───────────────────────────────
+
+    test "removes empty string from Enum.join", %{result: %{code: code}} do
+      refute code =~ ~S|Enum.join("")|
+    end
+
+    # ─── Unfixable rules still reported ─────────────────────────────
+
+    test "reports descriptive_names issues for single-letter params",
+         %{result: %{issues: issues}} do
+      name_issues = Enum.filter(issues, &(&1.rule == :descriptive_names))
+      assert length(name_issues) >= 2
+    end
+
+    # ─── Sanity checks ─────────────────────────────────────────────
+
+    test "output compiles without errors", %{result: %{code: code}} do
+      assert {:ok, _ast} = Code.string_to_quoted(code)
+    end
+
+    test "some unfixable rules still detected in remaining issues", %{result: %{issues: issues}} do
+      distinct_rules = issues |> Enum.map(& &1.rule) |> Enum.uniq()
+      assert length(distinct_rules) >= 3
     end
   end
 end

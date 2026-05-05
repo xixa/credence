@@ -36,8 +36,7 @@ defmodule Credence.Rule.NoListAppendInReduce do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
         # 3-arg: Enum.reduce(enum, [], fn ...)
-        {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, meta, [_enum, [], fun]} = node,
-        issues ->
+        {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, meta, [_enum, [], fun]} = node, issues ->
           {node, check_lambda(fun, meta, issues)}
 
         # 2-arg piped: |> Enum.reduce([], fn ...)

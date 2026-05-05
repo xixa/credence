@@ -226,10 +226,9 @@ defmodule Credence.Rule.NoMapThenAggregateTest do
 
       result = fix(code)
       assert result =~ "Enum.reduce"
-      assert result =~ "_el"
-      assert result =~ "_best"
+      assert result =~ "el"
+      assert result =~ "best"
       assert result =~ "max("
-      assert result =~ "apply"
       assert result =~ "String.length"
       refute result =~ "Enum.map"
     end
@@ -253,8 +252,9 @@ defmodule Credence.Rule.NoMapThenAggregateTest do
       result = fix(code)
       assert result =~ "Enum.reduce"
       assert result =~ "0"
-      assert result =~ "_acc"
+      assert result =~ "acc"
       assert result =~ "+"
+      assert result =~ "byte_size(el)"
       refute result =~ "Enum.map"
     end
 
@@ -304,7 +304,7 @@ defmodule Credence.Rule.NoMapThenAggregateTest do
       assert result =~ "Enum.reduce(list"
       assert result =~ "0"
       assert result =~ "+"
-      assert result =~ "apply"
+      assert result =~ "el * el"
       refute result =~ "Enum.sum(Enum.map"
     end
 
@@ -318,7 +318,6 @@ defmodule Credence.Rule.NoMapThenAggregateTest do
       result = fix(code)
       assert result =~ "Enum.reduce"
       assert result =~ "max("
-      assert result =~ "fn {_, temp} -> temp end"
       refute result =~ "Enum.map"
     end
 
@@ -329,8 +328,7 @@ defmodule Credence.Rule.NoMapThenAggregateTest do
 
       result = fix(code)
       assert result =~ "Enum.reduce"
-      assert result =~ "apply"
-      assert result =~ "byte_size"
+      assert result =~ "byte_size(el)"
       refute result =~ "Enum.map"
     end
 

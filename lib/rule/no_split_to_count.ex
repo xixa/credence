@@ -38,8 +38,7 @@ defmodule Credence.Rule.NoSplitToCount do
         # length(String.split(str, sep)) - 1
         {:-, meta,
          [
-           {:length, _,
-            [{{:., _, [{:__aliases__, _, [:String]}, :split]}, _, [_str, _sep]}]},
+           {:length, _, [{{:., _, [{:__aliases__, _, [:String]}, :split]}, _, [_str, _sep]}]},
            1
          ]} = node,
         acc ->
@@ -48,8 +47,7 @@ defmodule Credence.Rule.NoSplitToCount do
         # length(String.split(str, sep)) - 1 (with unary minus AST for 1)
         {:-, meta,
          [
-           {:length, _,
-            [{{:., _, [{:__aliases__, _, [:String]}, :split]}, _, [_str, _sep]}]},
+           {:length, _, [{{:., _, [{:__aliases__, _, [:String]}, :split]}, _, [_str, _sep]}]},
            {:__block__, _, [1]}
          ]} = node,
         acc ->

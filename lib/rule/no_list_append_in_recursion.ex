@@ -180,8 +180,29 @@ defmodule Credence.Rule.NoListAppendInRecursion do
 
   defp find_returned_param_idx(body, params) do
     last = last_expression(body)
-    if simple_var?(last), do: Enum.find_index(params, &same_var?(&1, last))
+
+    cond do
+      # Base case returns bare accumulator: `acc`
+      simple_var?(last) ->
+        Enum.find_index(params, &same_var?(&1, last))
+
+      # Base case already returns Enum.reverse(acc)
+      enum_reverse_of_var?(last) ->
+        var = extract_reverse_arg(last)
+        if simple_var?(var), do: Enum.find_index(params, &same_var?(&1, var))
+
+      true ->
+        nil
+    end
   end
+
+  defp enum_reverse_of_var?({{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, _, [_arg]}),
+    do: true
+
+  defp enum_reverse_of_var?(_), do: false
+
+  defp extract_reverse_arg({{:., _, [{:__aliases__, _, [:Enum]}, :reverse]}, _, [arg]}),
+    do: arg
 
   # ---------------------------------------------------------------------------
   # Fix — Pass 2: apply transforms
@@ -253,19 +274,28 @@ defmodule Credence.Rule.NoListAppendInRecursion do
     {kind, meta, [call_or_when, put_body(body_kw, new_body)]}
   end
 
-  # Wrap the base case return with Enum.reverse()
+  # Wrap the base case return with Enum.reverse() — unless it already has one
   defp fix_base(kind, meta, call_or_when, body_kw, body, params, acc_idx) do
     last = last_expression(body)
     acc_param = Enum.at(params, acc_idx)
 
-    if acc_param && simple_var?(last) && same_var?(last, acc_param) do
-      reverse =
-        {{:., [], [{:__aliases__, [], [:Enum]}, :reverse]}, [], [last]}
+    cond do
+      # Base returns bare accumulator → add Enum.reverse
+      acc_param && simple_var?(last) && same_var?(last, acc_param) ->
+        reverse =
+          {{:., [], [{:__aliases__, [], [:Enum]}, :reverse]}, [], [last]}
 
-      new_body = replace_last_expression(body, reverse)
-      {kind, meta, [call_or_when, put_body(body_kw, new_body)]}
-    else
-      {kind, meta, [call_or_when, body_kw]}
+        new_body = replace_last_expression(body, reverse)
+        {kind, meta, [call_or_when, put_body(body_kw, new_body)]}
+
+      # Base already returns Enum.reverse(acc) → leave as-is
+      acc_param && enum_reverse_of_var?(last) &&
+        simple_var?(extract_reverse_arg(last)) &&
+          same_var?(extract_reverse_arg(last), acc_param) ->
+        {kind, meta, [call_or_when, body_kw]}
+
+      true ->
+        {kind, meta, [call_or_when, body_kw]}
     end
   end
 
