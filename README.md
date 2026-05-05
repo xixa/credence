@@ -96,12 +96,12 @@ Pass custom rules via the `:rules` option or add them to `@default_rules` in `Cr
 | `NoDestructureReconstruct` | List destructured into variables only to reconstruct the same list | ✅ |
 | `NoDocFalseOnPrivate` | `@doc false` on private functions (`defp`) — redundant | ✅ |
 | `NoDoubleSortSameList` | Same list sorted twice (ascending then descending) — use `Enum.sort/2` once | ✅ |
-| `NoEagerWithIndexInReduce` | `Enum.with_index/1` passed directly into `Enum.reduce` — use `Enum.with_index/2` | ✅ |
+| `NoEagerWithIndexInReduce` | `Enum.with_index/1` passed directly into `Enum.reduce` — use `Stream.with_index/1` | ✅ |
 | `NoEnumAtBinarySearch` | `Enum.at/2` inside recursive binary search functions — use a tuple/array | ❌ |
 | `NoEnumAtInLoop` | `Enum.at/2` inside looping constructs — O(n) per iteration | ❌ |
 | `NoEnumAtLoopAccess` | `Enum.at/2` inside loops (heuristic) | ❌ |
 | `NoEnumAtMidpointAccess` | `Enum.at/2` with a midpoint index inside divide-and-conquer patterns | ✅ |
-| `NoEnumAtNegativeIndex` | Multiple `Enum.at/2` inside a single function - converted to reverse + pattern match | ✅ |
+| `NoEnumAtNegativeIndex` | `Enum.at/2` with negative index — grouped into reverse + pattern match, or `List.last` | ✅ |
 | `NoEnumCountForLength` | `Enum.count/1` without a predicate on a plain list — use `length/1` | ✅ |
 | `NoEnumDropNegative` | `Enum.drop(list, -n)` — use `Enum.take/2` instead | ✅ |
 | `NoEnumTakeNegative` | `Enum.take(list, -n)` — use `Enum.drop/2` and reverse instead | ✅ |
@@ -110,10 +110,13 @@ Pass custom rules via the `:rules` option or add them to `@default_rules` in `Cr
 | `NoExplicitSumReduce` | Explicit sum-reduction pattern inside `Enum.reduce/3` — use `Enum.sum/1` | ✅ |
 | `NoGraphemePalindromeCheck` | String palindrome check via `String.graphemes` — use `String.reverse/1` | ✅ |
 | `NoGuardEqualityForPatternMatch` | Guard equality check on a parameter that could be a pattern match clause | ✅ |
+| `NoIdentityFunctionInEnum` | `Enum._by` with identity callback (`fn x -> x end`, `& &1`) — use non-`_by` variant | ✅ |
 | `NoIntegerToStringDigits` | `Integer.to_string/1` \|> `String.graphemes/1` — use `Integer.digits/1` | ✅ |
-| `NoIsPrefixForNonGuard` | `is_` prefix on non-guard `def`/`defp` functions | ✅ |
+| `NoIsPrefixForNonGuard` | `is_` prefix on non-guard `def`/`defp` functions — use `?` suffix | ✅ |
+| `NoKernelOpInPipeline` | `Kernel.op/2` in pipeline — extract to infix operator | ✅ |
 | `NoKernelShadowing` | Variables that shadow `Kernel` functions | ❌ |
-| `NoLengthGuardToPattern` | `length/1` inside guard clauses - use pattern matching up to 5 elements | ✅ |
+| `NoLengthComparisonForEmpty` | `length(list)` compared to 0–5 — use `== []`, `!= []`, or `match?/2` | ✅ |
+| `NoLengthGuardToPattern` | `length/1` inside guard clauses — use pattern matching up to 5 elements | ✅ |
 | `NoLengthInGuard` | `length/1` inside guard clauses — nest logic instead | ❌ |
 | `NoListAppendInLoop` | `++` inside non-fixable looping constructs — O(n²) | ❌ |
 | `NoListAppendInRecursion` | `++` inside recursion — O(n²) | ✅ |
@@ -135,6 +138,7 @@ Pass custom rules via the `:rules` option or add them to `@default_rules` in `Cr
 | `NoMapThenAggregate` | `Enum.map/2` immediately followed by a terminal aggregation — use `map_` variant | ✅ |
 | `NoMapUpdateThenFetch` | `Map.update/4` or `Map.update!/3` followed by `Map.fetch/get` on the same key | ✅ |
 | `NoMultipleEnumAt` | Multiple `Enum.at/2` calls on the same list — convert to tuple | ✅ |
+| `NoMultiplyByOnePointZero` | `expr * 1.0` Python float coercion — remove the no-op | ✅ |
 | `NoNestedEnumOnSameEnumerable` | `Enum.member?/2` nested inside another `Enum.*` traversal on the same enumerable | ✅ |
 | `NoNestedEnumOnSameEnumerableUnfixable` | Nested `Enum.*` calls on the same enumerable (unfixable variant) | ❌ |
 | `NoParamRebinding` | Rebinding parameter names inside a function body | ✅ |
@@ -147,15 +151,19 @@ Pass custom rules via the `:rules` option or add them to `@default_rules` in `Cr
 | `NoSortThenAtUnfixable` | `Enum.sort \|> Enum.at` via intermediate variable (unfixable variant) | ❌ |
 | `NoSortThenReverse` | `Enum.sort/1` then `Enum.reverse/1` — use `Enum.sort(list, :desc)` | ✅ |
 | `NoSortThenReverseUnfixable` | Sort then reverse via intermediate variable (unfixable variant) | ❌ |
+| `NoSplitToCount` | `length(String.split(str, sep)) - 1` — Python `str.count()` translation | ❌ |
 | `NoStringConcatInLoop` | `<>` string concatenation inside loops — use `IO.iodata_to_binary` / iodata | ✅ |
 | `NoStringConcatInLoopUnfixable` | `<>` string concatenation in complex loops (unfixable variant) | ❌ |
 | `NoStringLengthForCharCheck` | `String.length(x) == 1` to check for a single character — use pattern matching | ✅ |
 | `NoTakeWhileLengthCheck` | `Enum.take_while/2 \|> length/1` — use `Enum.count/2` with a predicate | ✅ |
+| `NoTrailingNewlineInDoc` | Trailing `\n` in `@doc`/`@moduledoc` strings — strip it | ✅ |
 | `NoUnderscoreFunctionName` | Leading `_` in function names to indicate privacy — use `defp` instead | ✅ |
 | `NoUnnecessaryCatchAllRaise` | Catch-all clause where every argument is a wildcard and the body just raises | ✅ |
 | `PreferDescSortOverNegativeTake` | `Enum.sort \|> Enum.take(-n)` — use `Enum.sort(list, :desc) \|> Enum.take(n)` | ✅ |
 | `PreferEnumReverseTwo` | `Enum.reverse(list) ++ other` — use `Enum.reverse(list, other)` | ✅ |
 | `PreferEnumSlice` | `Enum.drop/2 \|> Enum.take/2` — use `Enum.slice/3` | ✅ |
+| `PreferHeredocForMultiLineDoc` | Multi-line `@doc` with `\n` escapes — convert to heredoc `"""` | ✅ |
+| `PreferMapFetchOverHasKey` | `Map.has_key?/2` in `if`/`cond` conditions — use `Map.fetch/2` instead | ❌ |
 | `RedundantListGuard` | Redundant `is_list/1` guard on a variable already matched as a list | ✅ |
 | `UnnecessaryGraphemeChunking` | N-gram pipeline that converts string to graphemes unnecessarily | ✅ |
 | `UnnecessaryGraphemeChunkingUnfixable` | Inefficient grapheme-based string transformation (unfixable variant) | ❌ |
