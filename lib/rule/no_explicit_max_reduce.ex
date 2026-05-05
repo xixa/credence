@@ -13,8 +13,11 @@ defmodule Credence.Rule.NoExplicitMaxReduce do
   will NOT be flagged.
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
@@ -25,7 +28,6 @@ defmodule Credence.Rule.NoExplicitMaxReduce do
           if reduce_call?(node) and max_reduce_body?(args) do
             issue = %Issue{
               rule: :no_explicit_max_reduce,
-              severity: :warning,
               message: "Explicit max-reduction detected. Prefer Enum.max/1 or Enum.max_by/2.",
               meta: %{line: Keyword.get(meta, :line)}
             }
@@ -42,17 +44,32 @@ defmodule Credence.Rule.NoExplicitMaxReduce do
     Enum.reverse(issues)
   end
 
-  # ----------------------------
-  # Detect Enum.reduce safely
-  # ----------------------------
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Sourceror.parse_string!()
+    |> Macro.postwalk(fn
+      {{:., _, _}, _, args} = node ->
+        if reduce_call?(node) and max_reduce_body?(args) do
+          [enum | _] = args
+          enum_max_call(enum)
+        else
+          node
+        end
+
+      node ->
+        node
+    end)
+    |> Sourceror.to_string()
+  end
+
+  defp enum_max_call(enum) do
+    {{:., [], [{:__aliases__, [], [:Enum]}, :max]}, [], [enum]}
+  end
 
   defp reduce_call?({{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, _}), do: true
   defp reduce_call?({{:., _, [:Enum, :reduce]}, _, _}), do: true
   defp reduce_call?(_), do: false
-
-  # ----------------------------
-  # Extract fn body safely
-  # ----------------------------
 
   defp max_reduce_body?([
          _enum,
@@ -63,10 +80,6 @@ defmodule Credence.Rule.NoExplicitMaxReduce do
   end
 
   defp max_reduce_body?(_), do: false
-
-  # ----------------------------
-  # STRICT max detection only
-  # ----------------------------
 
   # Safely unwrap single-expression blocks (added by formatter/parser occasionally)
   defp explicit_max?({:__block__, _, [body]}), do: explicit_max?(body)

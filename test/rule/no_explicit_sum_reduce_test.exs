@@ -6,6 +6,14 @@ defmodule Credence.Rule.NoExplicitSumReduceTest do
     Credence.Rule.NoExplicitSumReduce.check(ast, [])
   end
 
+  defp fix(code), do: Credence.Rule.NoExplicitSumReduce.fix(code, [])
+
+  describe "fixable?" do
+    test "reports as fixable" do
+      assert Credence.Rule.NoExplicitSumReduce.fixable?() == true
+    end
+  end
+
   describe "NoExplicitSumReduce" do
     test "passes code that uses Enum.sum/1 instead of reduce" do
       code = """
@@ -106,6 +114,64 @@ defmodule Credence.Rule.NoExplicitSumReduceTest do
       """
 
       assert check(code) == []
+    end
+  end
+
+  describe "fix" do
+    test "replaces sum reduce with Enum.sum/1" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc -> acc + x end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.sum(list)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "handles reversed operand order" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc -> x + acc end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.sum(list)"
+    end
+
+    test "does not modify non-sum reductions" do
+      code = """
+      Enum.reduce(list, 1, fn x, acc -> x * acc end)
+      """
+
+      result = fix(code)
+      assert result =~ "Enum.reduce"
+      refute result =~ "Enum.sum"
+    end
+
+    test "preserves surrounding code" do
+      code = """
+      defmodule M do
+        def total(list) do
+          count = length(list)
+          sum = Enum.reduce(list, 0, fn x, acc -> acc + x end)
+          {count, sum}
+        end
+      end
+      """
+
+      result = fix(code)
+      assert result =~ "length(list)"
+      assert result =~ "Enum.sum(list)"
+      assert result =~ "{count, sum}"
+    end
+
+    test "round-trip: fixed code produces no issues" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc -> x + acc end)
+      """
+
+      fixed = fix(code)
+      {:ok, ast} = Code.string_to_quoted(fixed)
+      assert Credence.Rule.NoExplicitSumReduce.check(ast, []) == []
     end
   end
 end

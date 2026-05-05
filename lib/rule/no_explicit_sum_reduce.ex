@@ -1,7 +1,11 @@
 defmodule Credence.Rule.NoExplicitSumReduce do
   @moduledoc "Flags explicit sum-reduction patterns inside Enum.reduce/3."
-  @behaviour Credence.Rule
+
+  use Credence.Rule
   alias Credence.Issue
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
@@ -11,7 +15,6 @@ defmodule Credence.Rule.NoExplicitSumReduce do
           if reduce_call?(node) and sum_reduce_body?(args) do
             issue = %Issue{
               rule: :no_explicit_sum_reduce,
-              severity: :warning,
               message: "Explicit sum-reduction detected. Prefer Enum.sum/1.",
               meta: %{line: Keyword.get(meta, :line)}
             }
@@ -26,6 +29,29 @@ defmodule Credence.Rule.NoExplicitSumReduce do
       end)
 
     Enum.reverse(issues)
+  end
+
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Sourceror.parse_string!()
+    |> Macro.postwalk(fn
+      {{:., _, _}, _, args} = node ->
+        if reduce_call?(node) and sum_reduce_body?(args) do
+          [enum | _] = args
+          enum_sum_call(enum)
+        else
+          node
+        end
+
+      node ->
+        node
+    end)
+    |> Sourceror.to_string()
+  end
+
+  defp enum_sum_call(enum) do
+    {{:., [], [{:__aliases__, [], [:Enum]}, :sum]}, [], [enum]}
   end
 
   defp reduce_call?({{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, _}), do: true

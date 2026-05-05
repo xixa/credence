@@ -20,8 +20,11 @@ defmodule Credence.Rule.NoRedundantEnumJoinSeparator do
       items |> Enum.map_join(&to_string/1)
       Enum.map_join(items, &to_string/1)
   """
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
@@ -53,10 +56,38 @@ defmodule Credence.Rule.NoRedundantEnumJoinSeparator do
     Enum.reverse(issues)
   end
 
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Code.string_to_quoted!()
+    |> Macro.postwalk(fn
+      # Direct call: Enum.join(list, "") → Enum.join(list)
+      {{:., _, [{:__aliases__, _, [:Enum]}, :join]}, _meta, [list_arg, ""]} ->
+        {{:., [], [{:__aliases__, [], [:Enum]}, :join]}, [], [list_arg]}
+
+      # Piped call: ... |> Enum.join("") → ... |> Enum.join()
+      {{:., _, [{:__aliases__, _, [:Enum]}, :join]}, _meta, [""]} ->
+        {{:., [], [{:__aliases__, [], [:Enum]}, :join]}, [], []}
+
+      # Direct call: Enum.map_join(list, "", mapper) → Enum.map_join(list, mapper)
+      {{:., _, [{:__aliases__, _, [:Enum]}, :map_join]}, _meta, [list_arg, "", mapper]} ->
+        {{:., [], [{:__aliases__, [], [:Enum]}, :map_join]}, [], [list_arg, mapper]}
+
+      # Piped call: ... |> Enum.map_join("", mapper) → ... |> Enum.map_join(mapper)
+      {{:., _, [{:__aliases__, _, [:Enum]}, :map_join]}, _meta, ["", mapper]} ->
+        {{:., [], [{:__aliases__, [], [:Enum]}, :map_join]}, [], [mapper]}
+
+      node ->
+        node
+    end)
+    |> Macro.to_string()
+    |> Code.format_string!()
+    |> IO.iodata_to_binary()
+  end
+
   defp build_issue(meta) do
     %Issue{
       rule: :no_redundant_enum_join_separator,
-      severity: :info,
       message:
         "`Enum.join/1` and `Enum.map_join/2` already default to an empty string separator. " <>
           "Remove the redundant `\"\"` argument.",

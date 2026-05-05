@@ -1,20 +1,40 @@
 defmodule Credence.Rule.DescriptiveNames do
   @moduledoc """
-  Maintainability rule: Flags single-letter variable names in function signatures.
+  Maintainability rule: Detects single-letter variable names in function signatures.
 
-  Using names like `a`, `b`, or `n` makes the code harder to reason about.
-  Replacing them with descriptive names like `index`, `accumulator`, or `previous_value`
-  improves readability and reduces cognitive load.
+  Using single-letter names like `a`, `x`, or `n` forces the reader to keep track
+  of the variable's purpose in their short-term memory. Replacing these with
+  descriptive names reduces cognitive load and makes the code self-documenting.
+
+  While common in mathematical contexts, in software development, explicit names
+  like `index`, `accumulator`, or `user_id` make the logic much easier to reason
+  about at a glance.
 
   ## Bad
-      def process(a, b), do: a + b
+
+      # Named functions
+      def handle_event(e, s), do: {:ok, s}
+
+      # Anonymous functions
+      Enum.reduce(list, 0, fn x, acc -> x + acc end)
 
   ## Good
-      def process(base_value, increment), do: base_value + increment
+
+      # Named functions
+      def handle_event(event, state), do: {:ok, state}
+
+      # Anonymous functions
+      Enum.reduce(list, 0, fn price, total_sum -> price + total_sum end)
+
+      # Single underscores (ignored by this rule)
+      def handle_call(_msg, _from, state), do: {:reply, :ok, state}
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
+
+  @impl true
+  def fixable?, do: false
 
   @impl true
   def check(ast, _opts) do
@@ -24,7 +44,6 @@ defmodule Credence.Rule.DescriptiveNames do
         {kind, meta, [{_name, _, args}, _body]} = node, issues
         when kind in [:def, :defp] ->
           found_names = find_short_params(args || [], [])
-          # Return the original node so prewalk keeps traversing into the body
           {node, format_issues(found_names, meta) ++ issues}
 
         # Anonymous functions: fn ... -> ... end
@@ -48,12 +67,10 @@ defmodule Credence.Rule.DescriptiveNames do
     Enum.reverse(issues)
   end
 
-  # Case 1: A list (the argument list itself or pattern matches like [h | t])
   defp find_short_params(args, acc) when is_list(args) do
     Enum.reduce(args, acc, &find_short_params/2)
   end
 
-  # Case 2: A variable (3-tuple where the 3rd element is an atom/nil, e.g., {:x, meta, nil})
   defp find_short_params({name, _meta, context}, acc) when is_atom(name) and is_atom(context) do
     str_name = Atom.to_string(name)
 
@@ -64,18 +81,15 @@ defmodule Credence.Rule.DescriptiveNames do
     end
   end
 
-  # Case 3: A 3-tuple AST node (e.g., {:+, meta, [args]}) - recurse into the args list
   defp find_short_params({_name, _meta, args}, acc) when is_list(args) do
     find_short_params(args, acc)
   end
 
-  # Case 4: A 2-tuple literal (e.g., {a, b}) - correctly pass the accumulator through
   defp find_short_params({left, right}, acc) do
     acc = find_short_params(left, acc)
     find_short_params(right, acc)
   end
 
-  # Case 5: Catch-all for literals or things we don't care about
   defp find_short_params(_, acc), do: acc
 
   defp format_issues(names, meta) do
@@ -84,7 +98,6 @@ defmodule Credence.Rule.DescriptiveNames do
     |> Enum.map(fn name ->
       %Issue{
         rule: :descriptive_names,
-        severity: :warning,
         message: "The parameter `#{name}` is a single letter. Use a more descriptive name.",
         meta: %{line: Keyword.get(meta, :line)}
       }

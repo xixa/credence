@@ -7,6 +7,10 @@ defmodule Credence.Rule.NoExplicitMaxReduceTest do
     Credence.Rule.NoExplicitMaxReduce.check(ast, [])
   end
 
+  defp fix(code) do
+    Credence.Rule.NoExplicitMaxReduce.fix(code, [])
+  end
+
   describe "NoExplicitMaxReduce" do
     test "passes code that uses Enum.max/1 instead of reduce" do
       code = """
@@ -50,7 +54,7 @@ defmodule Credence.Rule.NoExplicitMaxReduceTest do
 
       assert %Issue{} = issue
       assert issue.rule == :no_explicit_max_reduce
-      assert issue.severity == :warning
+
       assert issue.message =~ "max-reduction"
       assert issue.meta.line != nil
     end
@@ -160,6 +164,121 @@ defmodule Credence.Rule.NoExplicitMaxReduceTest do
       """
 
       assert check(code) == []
+    end
+  end
+
+  describe "fixable?" do
+    test "reports as fixable" do
+      assert Credence.Rule.NoExplicitMaxReduce.fixable?() == true
+    end
+  end
+
+  describe "fix/2" do
+    test "replaces max/2 reduce with Enum.max/1" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc ->
+        max(x, acc)
+      end)
+      """
+
+      result = fix(code)
+
+      assert result =~ "Enum.max(list)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "replaces if > reduce with Enum.max/1" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc ->
+        if x > acc do x else acc end
+      end)
+      """
+
+      result = fix(code)
+
+      assert result =~ "Enum.max(list)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "replaces if >= reduce with Enum.max/1" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc ->
+        if x >= acc do x else acc end
+      end)
+      """
+
+      result = fix(code)
+
+      assert result =~ "Enum.max(list)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "does not modify sum reductions" do
+      code = """
+      Enum.reduce(list, 0, fn x, acc ->
+        acc + x
+      end)
+      """
+
+      result = fix(code)
+
+      assert result =~ "Enum.reduce"
+      refute result =~ "Enum.max"
+    end
+
+    test "fixes multiple max reduces in one pass" do
+      code = """
+      defmodule MultiFix do
+        def process(a, b) do
+          x = Enum.reduce(a, 0, fn v, acc -> max(v, acc) end)
+          y = Enum.reduce(b, 0, fn v, acc -> max(v, acc) end)
+          {x, y}
+        end
+      end
+      """
+
+      result = fix(code)
+
+      assert result =~ "Enum.max(a)"
+      assert result =~ "Enum.max(b)"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "preserves surrounding code when fixing" do
+      code = """
+      defmodule Preserved do
+        def run(list) do
+          total = Enum.sum(list)
+          biggest = Enum.reduce(list, 0, fn x, acc -> max(x, acc) end)
+          {total, biggest}
+        end
+      end
+      """
+
+      result = fix(code)
+
+      assert result =~ "Enum.sum(list)"
+      assert result =~ "Enum.max(list)"
+      assert result =~ "{total, biggest}"
+      refute result =~ "Enum.reduce"
+    end
+
+    test "fixed code produces no issues" do
+      code = """
+      defmodule RoundTrip do
+        def max_value(list) do
+          Enum.reduce(list, 0, fn x, acc ->
+            max(x, acc)
+          end)
+        end
+      end
+      """
+
+      fixed = fix(code)
+      {:ok, fixed_ast} = Code.string_to_quoted(fixed)
+      issues = Credence.Rule.NoExplicitMaxReduce.check(fixed_ast, [])
+
+      assert issues == []
     end
   end
 end

@@ -32,14 +32,13 @@ defmodule Credence.Rule.NoManualMin do
   | `if a <= b, do: a, else: b`     | `min(a, b)`    |
   | `if b > a, do: a, else: b`      | `min(a, b)`    |
   | `if b >= a, do: a, else: b`     | `min(a, b)`    |
-
-  ## Severity
-
-  `:warning`
   """
 
-  @behaviour Credence.Rule
+  use Credence.Rule
   alias Credence.Issue
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
@@ -54,18 +53,30 @@ defmodule Credence.Rule.NoManualMin do
     Enum.reverse(issues)
   end
 
-  # ------------------------------------------------------------
-  # NODE MATCHING
-  # ------------------------------------------------------------
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Code.string_to_quoted!()
+    |> Macro.postwalk(fn
+      {:if, _meta, [condition, branches]} = node ->
+        case extract_min_operands(condition, branches) do
+          {:ok, operands} -> min_call(operands)
+          :error -> node
+        end
+
+      node ->
+        node
+    end)
+    |> Macro.to_string()
+  end
 
   defp check_node({:if, meta, [condition, branches]}) do
     with {:ok, do_branch} <- fetch_branch(branches, :do),
          {:ok, else_branch} <- fetch_branch(branches, :else),
-         true <- is_min_pattern?(condition, do_branch, else_branch) do
+         true <- min_pattern?(condition, do_branch, else_branch) do
       {:ok,
        %Issue{
          rule: :no_manual_min,
-         severity: :warning,
          message: build_message(),
          meta: %{line: Keyword.get(meta, :line)}
        }}
@@ -86,27 +97,56 @@ defmodule Credence.Rule.NoManualMin do
   #   → "if b > a, do: a, else: b"  (return lesser in true branch)
   # ------------------------------------------------------------
 
-  defp is_min_pattern?({op, _, [left, right]}, do_branch, else_branch)
+  defp min_pattern?({op, _, [left, right]}, do_branch, else_branch)
        when op in [:<, :<=] do
     ast_equal?(do_branch, left) and ast_equal?(else_branch, right)
   end
 
-  defp is_min_pattern?({op, _, [left, right]}, do_branch, else_branch)
+  defp min_pattern?({op, _, [left, right]}, do_branch, else_branch)
        when op in [:>, :>=] do
     ast_equal?(do_branch, right) and ast_equal?(else_branch, left)
   end
 
-  defp is_min_pattern?(_, _, _), do: false
+  defp min_pattern?(_, _, _), do: false
 
-  # ------------------------------------------------------------
-  # HELPERS
-  # ------------------------------------------------------------
+  defp extract_min_operands(condition, branches) do
+    with {:ok, do_branch} <- fetch_branch(branches, :do),
+         {:ok, else_branch} <- fetch_branch(branches, :else) do
+      get_min_operands(condition, do_branch, else_branch)
+    end
+  end
+
+  # For < and <=: do_branch == left (the lesser value)
+  # Result: min(left, right)
+  defp get_min_operands({op, _, [left, right]}, do_branch, else_branch)
+       when op in [:<, :<=] do
+    if ast_equal?(do_branch, left) and ast_equal?(else_branch, right) do
+      {:ok, [left, right]}
+    else
+      :error
+    end
+  end
+
+  # For > and >=: do_branch == right (the lesser value)
+  # Result: min(right, left) — puts the lesser value first to match
+  # the convention shown in the documentation
+  defp get_min_operands({op, _, [left, right]}, do_branch, else_branch)
+       when op in [:>, :>=] do
+    if ast_equal?(do_branch, right) and ast_equal?(else_branch, left) do
+      {:ok, [right, left]}
+    else
+      :error
+    end
+  end
+
+  defp get_min_operands(_, _, _), do: :error
+
+  defp min_call([left, right]) do
+    {:min, [], [left, right]}
+  end
 
   defp fetch_branch(branches, key) when is_list(branches) do
-    case Keyword.fetch(branches, key) do
-      {:ok, val} -> {:ok, val}
-      :error -> :error
-    end
+    Keyword.fetch(branches, key)
   end
 
   defp fetch_branch(_, _), do: :error
@@ -121,16 +161,10 @@ defmodule Credence.Rule.NoManualMin do
   defp strip_meta({a, b}), do: {strip_meta(a), strip_meta(b)}
   defp strip_meta(other), do: other
 
-  # ------------------------------------------------------------
-  # MESSAGE GENERATION
-  # ------------------------------------------------------------
-
   defp build_message do
     """
     Manual `if` comparison used instead of `min/2`.
-
     Replace with `Kernel.min/2` for clarity:
-
         min(a, b)
     """
   end
