@@ -90,9 +90,15 @@ defmodule Credence.Rule.NoEnumTakeNegative do
 
   # Handle both Code.string_to_quoted (bare int) and Sourceror (__block__-wrapped)
   defp negative_take_args?([{:-, _, [n]}]) when is_integer(n) and n > 0, do: true
-  defp negative_take_args?([{:-, _, [{:__block__, _, [n]}]}]) when is_integer(n) and n > 0, do: true
+
+  defp negative_take_args?([{:-, _, [{:__block__, _, [n]}]}]) when is_integer(n) and n > 0,
+    do: true
+
   defp negative_take_args?([_, {:-, _, [n]}]) when is_integer(n) and n > 0, do: true
-  defp negative_take_args?([_, {:-, _, [{:__block__, _, [n]}]}]) when is_integer(n) and n > 0, do: true
+
+  defp negative_take_args?([_, {:-, _, [{:__block__, _, [n]}]}]) when is_integer(n) and n > 0,
+    do: true
+
   defp negative_take_args?(_), do: false
 
   # "Plain sort" = Enum.sort() with 0 args OR Enum.sort(list) with 1 non-direction arg
