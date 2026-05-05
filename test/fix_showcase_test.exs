@@ -59,7 +59,7 @@ defmodule Credence.FixShowcaseTest do
   end
   """
 
-  setup_all do
+  setup do
     %{result: Credence.fix(@input, [])}
   end
 
