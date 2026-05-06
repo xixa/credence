@@ -18,7 +18,7 @@ defmodule Credence.Pattern.NoListToTupleForAccess do
       <<first::utf8, _rest::binary>> = string
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

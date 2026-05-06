@@ -30,7 +30,7 @@ defmodule Credence.Pattern.InconsistentParamNames do
   given position cause that position to be skipped entirely.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

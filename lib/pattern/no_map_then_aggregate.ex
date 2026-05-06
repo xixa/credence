@@ -35,7 +35,7 @@ defmodule Credence.Pattern.NoMapThenAggregate do
   Both pipeline and direct-call nesting forms are detected.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
 
   alias Credence.Issue
 

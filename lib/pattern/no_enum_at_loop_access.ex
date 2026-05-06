@@ -14,7 +14,7 @@ defmodule Credence.Pattern.NoEnumAtLoopAccess do
     - or using Enum.with_index / direct iteration
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   # Special forms/macros that act as loops

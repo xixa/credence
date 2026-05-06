@@ -17,7 +17,7 @@ defmodule Credence.Pattern.NoIntegerToStringDigits do
       Integer.digits(number, 2)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

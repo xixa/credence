@@ -32,7 +32,7 @@ defmodule Credence.Pattern.NoManualListLast do
   rewrites call sites within the same source file.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

@@ -20,7 +20,7 @@ defmodule Credence.Pattern.NoManualStringReverse do
 
       reversed = String.reverse(str)
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

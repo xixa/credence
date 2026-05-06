@@ -100,7 +100,7 @@ defmodule Credence.Pattern.NoEnumAtMidpointAccess do
   See also `Credence.Pattern.NoEnumAtBinarySearch` which catches the same
   anti-pattern in recursive functions (not auto-fixable).
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

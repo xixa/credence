@@ -20,7 +20,7 @@ defmodule Credence.Pattern.NoStringLengthForCharCheck do
       end
       match?([_], String.graphemes(s))
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

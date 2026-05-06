@@ -16,7 +16,7 @@ defmodule Credence.Pattern.NoNestedEnumOnSameEnumerable do
       end)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @enum_funcs [

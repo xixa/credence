@@ -22,7 +22,7 @@ defmodule Credence.Pattern.NoListAppendInRecursion do
 
       def build([], result), do: Enum.reverse(result)
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

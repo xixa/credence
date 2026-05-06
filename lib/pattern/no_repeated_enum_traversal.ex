@@ -37,7 +37,7 @@ defmodule Credence.Pattern.NoRepeatedEnumTraversal do
       end
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @enum_traversals [

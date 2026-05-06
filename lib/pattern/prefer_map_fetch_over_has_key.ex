@@ -40,7 +40,7 @@ defmodule Credence.Pattern.PreferMapFetchOverHasKey do
   in the body (simple access, comparison, transformation).
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

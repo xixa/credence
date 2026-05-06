@@ -40,7 +40,7 @@ defmodule Credence.Pattern.NoStringConcatInLoopComplex do
       Enum.join(graphemes)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

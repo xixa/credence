@@ -36,7 +36,7 @@ defmodule Credence.Pattern.NoTakeWhileLengthCheck do
   - `enum |> Enum.take_while(fun) |> length()`
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

@@ -13,7 +13,7 @@ defmodule Credence.Pattern.NoExplicitMaxReduce do
   will NOT be flagged.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

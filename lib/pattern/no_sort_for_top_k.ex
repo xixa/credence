@@ -31,7 +31,7 @@ defmodule Credence.Pattern.NoSortForTopK do
       Enum.max(list)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

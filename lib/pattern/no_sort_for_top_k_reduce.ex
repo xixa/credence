@@ -30,7 +30,7 @@ defmodule Credence.Pattern.NoSortForTopKReduce do
       # Use Enum.reduce/3 to track the top-k elements in one pass
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

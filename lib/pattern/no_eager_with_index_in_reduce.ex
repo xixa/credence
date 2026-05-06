@@ -39,7 +39,7 @@ defmodule Credence.Pattern.NoEagerWithIndexInReduce do
   pattern (e.g. multi-clause fns or complex destructuring).
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @fix_strategy :stream

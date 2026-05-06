@@ -44,7 +44,7 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIteration do
       Enum.map(map, fn {k, _v} -> to_string(k) end)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @map_funcs [:keys, :values]

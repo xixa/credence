@@ -23,7 +23,7 @@ defmodule Credence.Pattern.UnnecessaryGraphemeChunking do
   the string length >= chunk size.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

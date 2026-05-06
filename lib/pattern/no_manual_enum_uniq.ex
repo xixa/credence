@@ -40,7 +40,7 @@ defmodule Credence.Pattern.NoManualEnumUniq do
       Enum.uniq(list)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

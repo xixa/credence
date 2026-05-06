@@ -20,7 +20,7 @@ defmodule Credence.Pattern.NoDocFalseOnPrivate do
       def internal_api(x), do: x + 1
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

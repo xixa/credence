@@ -33,7 +33,7 @@ defmodule Credence.Pattern.UseMapJoin do
   Only **adjacent** map→join is flagged.  Intervening steps like
   `Enum.map(f) |> Enum.filter(g) |> Enum.join()` are left alone.
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

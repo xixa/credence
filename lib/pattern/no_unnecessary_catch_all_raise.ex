@@ -42,7 +42,7 @@ defmodule Credence.Pattern.NoUnnecessaryCatchAllRaise do
   Removes the unnecessary catch-all clause, letting Elixir's built-in
   `FunctionClauseError` handle unmatched arguments with better diagnostics.
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

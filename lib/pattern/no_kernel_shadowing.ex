@@ -13,7 +13,7 @@ defmodule Credence.Pattern.NoKernelShadowing do
     - `min_val`, `local_min`, or `bottom` instead of `min`
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @shadowed [

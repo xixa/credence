@@ -22,7 +22,7 @@ defmodule Credence.Pattern.NoMapUpdateThenFetch do
       end
       map = Map.put(map, key, val)
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

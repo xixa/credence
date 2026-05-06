@@ -38,7 +38,7 @@ defmodule Credence.Pattern.RedundantListGuard do
         {t1, t2}
       end
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

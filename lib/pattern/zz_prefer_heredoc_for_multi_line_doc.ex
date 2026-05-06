@@ -26,7 +26,7 @@ defmodule Credence.Pattern.ZzPreferHeredocForMultiLineDoc do
   newline). Strings containing `\\\"\\\"\\\"` are left unchanged.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @doc_attrs [:doc, :moduledoc, :typedoc]

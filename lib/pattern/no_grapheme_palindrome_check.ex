@@ -23,7 +23,7 @@ defmodule Credence.Pattern.NoGraphemePalindromeCheck do
       cleaned == String.reverse(cleaned)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

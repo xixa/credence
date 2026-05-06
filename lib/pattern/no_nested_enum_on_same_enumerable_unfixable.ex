@@ -11,7 +11,7 @@ defmodule Credence.Pattern.NoNestedEnumOnSameEnumerableUnfixable do
   `Enum.reduce/3` pass, or a `MapSet`-based approach).
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @enum_funcs [

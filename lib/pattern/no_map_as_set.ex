@@ -34,7 +34,7 @@ defmodule Credence.Pattern.NoMapAsSet do
         {MapSet.put(seen, item), [item | acc]}
       end
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

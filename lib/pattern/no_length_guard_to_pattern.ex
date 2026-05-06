@@ -32,7 +32,7 @@ defmodule Credence.Pattern.NoLengthGuardToPattern do
         List.to_tuple(list)
       end
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

@@ -23,7 +23,7 @@ defmodule Credence.Pattern.NoSortThenAt do
   to rewrite.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

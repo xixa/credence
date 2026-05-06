@@ -25,7 +25,7 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForRawIteration do
       Enum.with_index(Map.values(m))
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @map_funcs [:keys, :values]

@@ -22,7 +22,7 @@ defmodule Credence.Pattern.NoSortThenAtUnfixable do
   quickselect algorithm.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

@@ -39,7 +39,7 @@ defmodule Credence.Pattern.NoDestructureReconstruct do
   (not literals, patterns, or underscore-prefixed names).
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

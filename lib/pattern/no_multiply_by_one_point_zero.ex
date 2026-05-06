@@ -29,7 +29,7 @@ defmodule Credence.Pattern.NoMultiplyByOnePointZero do
   line is a no-op self-assignment (`var = var * 1.0`), the line is deleted.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

@@ -37,7 +37,7 @@ defmodule Credence.Pattern.NoEnumAtNegativeIndex do
   pattern match on a single variable.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @max_fixable_depth 5

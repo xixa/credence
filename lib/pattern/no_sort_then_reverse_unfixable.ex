@@ -21,7 +21,7 @@ defmodule Credence.Pattern.NoSortThenReverseUnfixable do
       [max1, max2, max3 | _] = Enum.sort(nums, :desc)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

@@ -24,7 +24,7 @@ defmodule Credence.Pattern.NoMultipleEnumAt do
       [max1, max2 | _] = Enum.reverse(sorted)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @min_calls_to_flag 3

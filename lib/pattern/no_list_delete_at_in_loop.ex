@@ -24,7 +24,7 @@ defmodule Credence.Pattern.NoListDeleteAtInLoop do
         end |> List.flatten()
       end
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @enum_loops [:reduce, :map, :flat_map, :each, :filter]

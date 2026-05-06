@@ -34,7 +34,7 @@ defmodule Credence.Pattern.NoUnderscoreFunctionName do
   `do_name` throughout the module.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

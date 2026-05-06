@@ -32,7 +32,7 @@ defmodule Credence.Pattern.NoListLast do
         end)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

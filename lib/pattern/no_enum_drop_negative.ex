@@ -27,7 +27,7 @@ defmodule Credence.Pattern.NoEnumDropNegative do
       # Or use Enum.slice/2 if you know the desired length:
       Enum.slice(list, 0..-2//1)
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

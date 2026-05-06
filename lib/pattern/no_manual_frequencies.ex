@@ -18,7 +18,7 @@ defmodule Credence.Pattern.NoManualFrequencies do
       Enum.frequencies(list)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

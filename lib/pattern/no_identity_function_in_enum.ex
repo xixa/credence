@@ -28,7 +28,7 @@ defmodule Credence.Pattern.NoIdentityFunctionInEnum do
   Handles `fn x -> x end`, `& &1`, and `&(&1)` as identity functions.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @by_to_simple %{

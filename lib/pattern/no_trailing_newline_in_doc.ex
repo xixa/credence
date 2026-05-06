@@ -26,7 +26,7 @@ defmodule Credence.Pattern.NoTrailingNewlineInDoc do
   only newlines are trailing). Heredoc-style docs are not modified.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @doc_attrs [:doc, :moduledoc, :typedoc]

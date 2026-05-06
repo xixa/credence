@@ -20,7 +20,7 @@ defmodule Credence.Pattern.PreferDescSortOverNegativeTake do
 
       Enum.sort(nums, :desc) |> Enum.take(3)
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

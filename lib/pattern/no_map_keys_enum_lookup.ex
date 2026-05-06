@@ -35,7 +35,7 @@ defmodule Credence.Pattern.NoMapKeysEnumLookup do
   Patterns where only keys are needed (no value lookup in the callback)
   are **not** flagged.
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @flagged_enum_fns [:all?, :any?, :each, :map, :filter, :reject, :flat_map]

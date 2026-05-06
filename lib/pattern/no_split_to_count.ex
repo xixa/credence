@@ -25,7 +25,7 @@ defmodule Credence.Pattern.NoSplitToCount do
   separator is a single character or a multi-character substring.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

@@ -50,7 +50,7 @@ defmodule Credence.Pattern.UnnecessaryGraphemeChunking.Unfixable do
      incremental computation.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @string_to_list [:graphemes, :codepoints]

@@ -29,7 +29,7 @@ defmodule Credence.Pattern.AvoidGraphemesLength do
       |> String.length()
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

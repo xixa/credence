@@ -24,7 +24,7 @@ defmodule Credence.Pattern.NoAnonFnApplicationInPipe do
       |> then(&[1 | &1])
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

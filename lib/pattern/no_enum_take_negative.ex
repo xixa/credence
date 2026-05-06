@@ -11,7 +11,7 @@ defmodule Credence.Pattern.NoEnumTakeNegative do
   When `Enum.take(-n)` directly follows `Enum.sort()` in a pipeline, the fix
   defers to `PreferDescSortOverNegativeTake`.
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

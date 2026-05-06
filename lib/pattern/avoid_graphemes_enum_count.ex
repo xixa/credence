@@ -38,7 +38,7 @@ defmodule Credence.Pattern.AvoidGraphemesEnumCount do
       |> Enum.count(fn char -> char == "a" end)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

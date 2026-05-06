@@ -30,7 +30,7 @@ defmodule Credence.Pattern.NoKernelOpInPipeline do
   `Kernel.+(n)` in a pipe has no clearly better alternative.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @flagged_ops ~w(== != === !== < > <= >= and or)a

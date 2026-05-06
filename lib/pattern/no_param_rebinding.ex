@@ -23,7 +23,7 @@ defmodule Credence.Pattern.NoParamRebinding do
         {new_count, new_q}
       end)
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

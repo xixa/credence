@@ -9,7 +9,7 @@ defmodule Credence.Pattern.PreferEnumReverseTwo do
   ## Good
       defp do_merge([], l2, acc), do: Enum.reverse(acc, l2)
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

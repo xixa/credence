@@ -18,7 +18,7 @@ defmodule Credence.Pattern.NoDoubleSortSameList do
       asc = Enum.sort(arr)
       desc = Enum.reverse(asc)
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

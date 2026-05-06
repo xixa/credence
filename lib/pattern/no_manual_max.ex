@@ -32,7 +32,7 @@ defmodule Credence.Pattern.NoManualMax do
   | `if b < a, do: a, else: b`      | `max(a, b)`    |
   | `if b <= a, do: a, else: b`     | `max(a, b)`    |
   """
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

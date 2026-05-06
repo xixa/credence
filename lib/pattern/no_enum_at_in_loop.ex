@@ -42,7 +42,7 @@ defmodule Credence.Pattern.NoEnumAtInLoop do
       Enum.reduce(Enum.with_index(list), 0, fn {val, _idx}, acc -> acc + val end)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @enum_loops [:reduce, :reduce_while, :map, :flat_map, :each, :filter]

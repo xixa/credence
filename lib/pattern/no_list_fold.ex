@@ -23,7 +23,7 @@ defmodule Credence.Pattern.NoListFold do
   | `List.foldr/3`       | `Enum.reduce/3` (with `Enum.reverse/1`) |
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @flagged_fns [:foldl, :foldr]

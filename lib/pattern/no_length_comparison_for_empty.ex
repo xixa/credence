@@ -35,7 +35,7 @@ defmodule Credence.Pattern.NoLengthComparisonForEmpty do
   simple variable name.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @max_n 5

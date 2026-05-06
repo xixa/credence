@@ -31,7 +31,7 @@ defmodule Credence.Pattern.NoStringConcatInLoop do
       Enum.map_join(graphemes, fn char -> String.upcase(char) end)
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

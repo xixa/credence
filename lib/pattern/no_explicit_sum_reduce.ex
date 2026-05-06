@@ -1,7 +1,7 @@
 defmodule Credence.Pattern.NoExplicitSumReduce do
   @moduledoc "Flags explicit sum-reduction patterns inside Enum.reduce/3."
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   @impl true

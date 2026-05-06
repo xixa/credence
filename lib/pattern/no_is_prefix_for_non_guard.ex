@@ -38,7 +38,7 @@ defmodule Credence.Pattern.NoIsPrefixForNonGuard do
   within the same source file. `is_valid_foo` becomes `valid_foo?`.
   """
 
-  use Credence.Rule
+  use Credence.Pattern.Rule
   alias Credence.Issue
 
   # Guard-safe BIFs from Erlang that legitimately use the is_ prefix.
