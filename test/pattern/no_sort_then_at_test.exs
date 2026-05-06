@@ -14,27 +14,94 @@ defmodule Credence.Pattern.NoSortThenAtTest do
 
   # ───────────────────────── check/2 tests ─────────────────────────
 
-  describe "check/2" do
-    test "flags Enum.sort |> Enum.at pipeline" do
+  describe "check/2 — flags literal indexes" do
+    test "flags Enum.sort |> Enum.at(0)" do
+      code = """
+      defmodule M do
+        def smallest(nums), do: Enum.sort(nums) |> Enum.at(0)
+      end
+      """
+
+      assert [%Issue{rule: :no_sort_then_at}] = check(code)
+    end
+
+    test "flags Enum.sort |> Enum.at(-1)" do
+      code = """
+      defmodule M do
+        def largest(nums), do: Enum.sort(nums) |> Enum.at(-1)
+      end
+      """
+
+      assert [%Issue{rule: :no_sort_then_at}] = check(code)
+    end
+
+    test "flags Enum.sort(:desc) |> Enum.at(0)" do
+      code = """
+      defmodule M do
+        def largest(nums), do: Enum.sort(nums, :desc) |> Enum.at(0)
+      end
+      """
+
+      assert [%Issue{rule: :no_sort_then_at}] = check(code)
+    end
+
+    test "flags nested Enum.at(Enum.sort(...), 0)" do
+      code = """
+      defmodule M do
+        def smallest(nums), do: Enum.at(Enum.sort(nums), 0)
+      end
+      """
+
+      assert [%Issue{rule: :no_sort_then_at}] = check(code)
+    end
+
+    test "flags nested Enum.at(Enum.sort(...), -1)" do
+      code = """
+      defmodule M do
+        def largest(nums), do: Enum.at(Enum.sort(nums), -1)
+      end
+      """
+
+      assert [%Issue{rule: :no_sort_then_at}] = check(code)
+    end
+  end
+
+  describe "check/2 — does NOT flag variable indexes" do
+    test "does not flag Enum.sort |> Enum.at(k - 1)" do
       code = """
       defmodule M do
         def kth(nums, k), do: Enum.sort(nums, :desc) |> Enum.at(k - 1)
       end
       """
 
-      assert [%Issue{rule: :no_sort_then_at}] = check(code)
+      assert check(code) == []
     end
 
-    test "flags nested Enum.at(Enum.sort(...))" do
+    test "does not flag nested Enum.at(Enum.sort(...), div(n, 2))" do
       code = """
       defmodule M do
         def median(nums), do: Enum.at(Enum.sort(nums), div(length(nums), 2))
       end
       """
 
-      assert [%Issue{rule: :no_sort_then_at}] = check(code)
+      assert check(code) == []
     end
 
+    test "does not flag Enum.sort |> Enum.at(mid)" do
+      code = """
+      defmodule M do
+        def middle(nums) do
+          mid = div(length(nums), 2)
+          Enum.sort(nums) |> Enum.at(mid)
+        end
+      end
+      """
+
+      assert check(code) == []
+    end
+  end
+
+  describe "check/2 — does NOT flag unrelated patterns" do
     test "does not flag plain Enum.at" do
       code = """
       defmodule M do

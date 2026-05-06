@@ -16,11 +16,10 @@ defmodule Credence.Pattern.NoSortThenAt do
       Enum.min(nums)
       Enum.max(nums)
 
-  ## Not auto-fixed (delegated to LLM)
+  ## Not flagged
 
-  Variable indices such as `Enum.sort(nums) |> Enum.at(k - 1)` or custom
-  comparators are still flagged by `check/2` but require human/LLM judgement
-  to rewrite.
+  Variable indices such as `Enum.sort(nums) |> Enum.at(k - 1)` are not flagged
+  because they represent valid kth-element access that genuinely needs a sort.
   """
 
   use Credence.Pattern.Rule
@@ -33,21 +32,27 @@ defmodule Credence.Pattern.NoSortThenAt do
   def check(ast, _opts) do
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
-        # Pipeline: ... |> Enum.sort(...) |> Enum.at(...)
-        {:|>, meta, [left, right]} = node, issues ->
-          if remote_call?(right, :Enum, :at) and remote_call?(rightmost(left), :Enum, :sort) do
+        # Pipeline: ... |> Enum.sort(...) |> Enum.at(literal_index)
+        {:|>, meta,
+         [left, {{:., _, [{:__aliases__, _, [:Enum]}, :at]}, _, at_args}]} = node,
+        issues ->
+          if remote_call?(rightmost(left), :Enum, :sort) and has_literal_index?(at_args) do
             {node, [build_issue(meta) | issues]}
           else
             {node, issues}
           end
 
-        # Nested: Enum.at(Enum.sort(...), index)
+        # Nested: Enum.at(Enum.sort(...), literal_index)
         {{:., _, [{:__aliases__, _, [:Enum]}, :at]}, meta,
          [
-           {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, _} | _rest
+           {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, _} | rest
          ]} = node,
         issues ->
-          {node, [build_issue(meta) | issues]}
+          if has_literal_index?(rest) do
+            {node, [build_issue(meta) | issues]}
+          else
+            {node, issues}
+          end
 
         node, issues ->
           {node, issues}
@@ -82,7 +87,6 @@ defmodule Credence.Pattern.NoSortThenAt do
 
   # ── Pipeline fix ──────────────────────────────────────────────────────────
 
-  # lhs is itself an Enum.sort(...) call (single-step pipeline)
   defp fix_pipe_sort_at(
          {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, sort_args} = _lhs,
          index_arg,
@@ -96,7 +100,6 @@ defmodule Credence.Pattern.NoSortThenAt do
     end
   end
 
-  # lhs is a pipeline ending in Enum.sort(...)  (multi-step pipeline)
   defp fix_pipe_sort_at(
          {:|>, pipe_meta, [deeper, {{:., _, [{:__aliases__, _, [:Enum]}, :sort]}, _, sort_args}]},
          index_arg,
@@ -113,7 +116,6 @@ defmodule Credence.Pattern.NoSortThenAt do
     end
   end
 
-  # Anything else — leave unchanged
   defp fix_pipe_sort_at(_lhs, _index, node), do: node
 
   # ── Nested fix ────────────────────────────────────────────────────────────
@@ -128,6 +130,13 @@ defmodule Credence.Pattern.NoSortThenAt do
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 
+  # Check if the args list to Enum.at contains a literal numeric index
+  defp has_literal_index?([n]) when is_integer(n), do: true
+  defp has_literal_index?([{:__block__, _, [n]}]) when is_integer(n), do: true
+  defp has_literal_index?([{:-, _, [n]}]) when is_integer(n), do: true
+  defp has_literal_index?([{:-, _, [{:__block__, _, [n]}]}]) when is_integer(n), do: true
+  defp has_literal_index?(_), do: false
+
   # Normalise Sourceror's various integer representations into {:ok, n} | :error
   defp literal_index(n) when is_integer(n), do: {:ok, n}
   defp literal_index({:__block__, _, [n]}) when is_integer(n), do: {:ok, n}
@@ -135,14 +144,11 @@ defmodule Credence.Pattern.NoSortThenAt do
   defp literal_index({:-, _, [{:__block__, _, [n]}]}) when is_integer(n), do: {:ok, -n}
   defp literal_index(_), do: :error
 
-  # Determine sort direction from the arguments to Enum.sort/1 or /2.
-  # Returns :asc | :desc | :unknown
   defp sort_direction([_collection]), do: :asc
   defp sort_direction([_collection, {:__block__, _, [dir]}]) when dir in [:asc, :desc], do: dir
   defp sort_direction([_collection, dir]) when dir in [:asc, :desc], do: dir
   defp sort_direction(_), do: :unknown
 
-  # Build Enum.min/1 or Enum.max/1
   defp replacement_call(:asc, :first, c), do: make_remote(:Enum, :min, [c])
   defp replacement_call(:asc, :last, c), do: make_remote(:Enum, :max, [c])
   defp replacement_call(:desc, :first, c), do: make_remote(:Enum, :max, [c])
@@ -163,9 +169,8 @@ defmodule Credence.Pattern.NoSortThenAt do
     %Issue{
       rule: :no_sort_then_at,
       message:
-        "Sorting a list and then accessing a single element with `Enum.at/2` is O(n log n) " <>
-          "when you may only need O(n). For min/max, use `Enum.min/1` or `Enum.max/1`. " <>
-          "For top-k, consider `Enum.take/2` on the sorted result.",
+        "Sorting a list then accessing by literal index is O(n log n) " <>
+          "when O(n) suffices. Use `Enum.min/1` or `Enum.max/1` instead.",
       meta: %{line: Keyword.get(meta, :line)}
     }
   end
