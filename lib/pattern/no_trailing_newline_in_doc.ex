@@ -23,7 +23,8 @@ defmodule Credence.Pattern.NoTrailingNewlineInDoc do
   ## Auto-fix
 
   Strips trailing `\\n` from single-line doc strings (strings where the
-  only newlines are trailing). Heredoc-style docs are not modified.
+  only newlines are trailing). Heredoc-style docs (`\"\"\"`) are not flagged
+  or modified — their trailing `\\n` is structural and expected.
   """
 
   use Credence.Pattern.Rule
@@ -37,12 +38,18 @@ defmodule Credence.Pattern.NoTrailingNewlineInDoc do
   # ── Check (Code.string_to_quoted AST — escapes resolved) ───────
 
   @impl true
-  def check(ast, _opts) do
+  def check(ast, opts) do
+    source_lines =
+      case Keyword.get(opts, :source) do
+        nil -> nil
+        source -> String.split(source, "\n")
+      end
+
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
         {:@, meta, [{attr, _, [value]}]} = node, acc
         when attr in @doc_attrs and is_binary(value) ->
-          if trailing_newline_only?(value) do
+          if trailing_newline_only?(value) and not already_heredoc?(source_lines, meta) do
             {node, [build_issue(meta, attr) | acc]}
           else
             {node, acc}
@@ -53,6 +60,19 @@ defmodule Credence.Pattern.NoTrailingNewlineInDoc do
       end)
 
     Enum.reverse(issues)
+  end
+
+  # Heredoc trailing \n is structural — not a real issue.
+  # When source is available, check the actual source line for """.
+  defp already_heredoc?(nil, _meta), do: false
+
+  defp already_heredoc?(source_lines, meta) do
+    line = Keyword.get(meta, :line)
+
+    case Enum.at(source_lines, line - 1) do
+      nil -> false
+      source_line -> String.contains?(source_line, ~s("""))
+    end
   end
 
   # ── Fix (Sourceror AST — escapes may be raw OR resolved) ───────
@@ -77,12 +97,17 @@ defmodule Credence.Pattern.NoTrailingNewlineInDoc do
 
   defp fix_node({:@, meta, [{attr, attr_meta, [{:__block__, str_meta, [value]}]}]} = node)
        when attr in @doc_attrs and is_binary(value) do
-    case strip_trailing_doc_newline(value) do
-      {:ok, cleaned} ->
-        {:@, meta, [{attr, attr_meta, [{:__block__, str_meta, [cleaned]}]}]}
+    # Heredoc trailing \n is structural — don't strip it
+    if Keyword.get(str_meta, :delimiter) == ~s(""") do
+      node
+    else
+      case strip_trailing_doc_newline(value) do
+        {:ok, cleaned} ->
+          {:@, meta, [{attr, attr_meta, [{:__block__, str_meta, [cleaned]}]}]}
 
-      :skip ->
-        node
+        :skip ->
+          node
+      end
     end
   end
 
@@ -93,9 +118,10 @@ defmodule Credence.Pattern.NoTrailingNewlineInDoc do
   defp has_fixable_doc?(ast) do
     {_ast, found} =
       Macro.prewalk(ast, false, fn
-        {:@, _, [{attr, _, [{:__block__, _, [value]}]}]} = node, acc
+        {:@, _, [{attr, _, [{:__block__, str_meta, [value]}]}]} = node, acc
         when attr in @doc_attrs and is_binary(value) ->
-          {node, acc or fixable_value?(value)}
+          already_heredoc = Keyword.get(str_meta, :delimiter) == ~s(""")
+          {node, acc or (not already_heredoc and fixable_value?(value))}
 
         node, acc ->
           {node, acc}

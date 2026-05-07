@@ -63,9 +63,7 @@ defmodule Credence.Pattern do
               fixed = rule.fix(source, opts)
 
               if fixed == source do
-                Logger.debug(
-                  "[credence_fix] #{name}: fix returned IDENTICAL source (no change)"
-                )
+                Logger.debug("[credence_fix] #{name}: fix returned IDENTICAL source (no change)")
               else
                 RuleHelpers.log_diff(name, source, fixed)
               end
@@ -76,9 +74,7 @@ defmodule Credence.Pattern do
             end
 
           {:error, reason} ->
-            Logger.debug(
-              "[credence_fix] source no longer parses at #{name}: #{inspect(reason)}"
-            )
+            Logger.debug("[credence_fix] source no longer parses at #{name}: #{inspect(reason)}")
 
             {source, applied}
         end
