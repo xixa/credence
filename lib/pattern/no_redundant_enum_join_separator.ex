@@ -59,31 +59,44 @@ defmodule Credence.Pattern.NoRedundantEnumJoinSeparator do
   @impl true
   def fix(source, _opts) do
     source
-    |> Code.string_to_quoted!()
+    |> Sourceror.parse_string!()
     |> Macro.postwalk(fn
       # Direct call: Enum.join(list, "") → Enum.join(list)
-      {{:., _, [{:__aliases__, _, [:Enum]}, :join]}, _meta, [list_arg, ""]} ->
-        {{:., [], [{:__aliases__, [], [:Enum]}, :join]}, [], [list_arg]}
+      {{:., dot_m, [{:__aliases__, al_m, [:Enum]}, :join]}, call_m, [list_arg, sep]} = node ->
+        if empty_string?(sep),
+          do: {{:., dot_m, [{:__aliases__, al_m, [:Enum]}, :join]}, call_m, [list_arg]},
+          else: node
 
       # Piped call: ... |> Enum.join("") → ... |> Enum.join()
-      {{:., _, [{:__aliases__, _, [:Enum]}, :join]}, _meta, [""]} ->
-        {{:., [], [{:__aliases__, [], [:Enum]}, :join]}, [], []}
+      {{:., dot_m, [{:__aliases__, al_m, [:Enum]}, :join]}, call_m, [sep]} = node ->
+        if empty_string?(sep),
+          do: {{:., dot_m, [{:__aliases__, al_m, [:Enum]}, :join]}, call_m, []},
+          else: node
 
       # Direct call: Enum.map_join(list, "", mapper) → Enum.map_join(list, mapper)
-      {{:., _, [{:__aliases__, _, [:Enum]}, :map_join]}, _meta, [list_arg, "", mapper]} ->
-        {{:., [], [{:__aliases__, [], [:Enum]}, :map_join]}, [], [list_arg, mapper]}
+      {{:., dot_m, [{:__aliases__, al_m, [:Enum]}, :map_join]}, call_m, [list_arg, sep, mapper]} =
+          node ->
+        if empty_string?(sep),
+          do: {{:., dot_m, [{:__aliases__, al_m, [:Enum]}, :map_join]}, call_m, [list_arg, mapper]},
+          else: node
 
       # Piped call: ... |> Enum.map_join("", mapper) → ... |> Enum.map_join(mapper)
-      {{:., _, [{:__aliases__, _, [:Enum]}, :map_join]}, _meta, ["", mapper]} ->
-        {{:., [], [{:__aliases__, [], [:Enum]}, :map_join]}, [], [mapper]}
+      {{:., dot_m, [{:__aliases__, al_m, [:Enum]}, :map_join]}, call_m, [sep, mapper]} = node ->
+        if empty_string?(sep),
+          do: {{:., dot_m, [{:__aliases__, al_m, [:Enum]}, :map_join]}, call_m, [mapper]},
+          else: node
 
       node ->
         node
     end)
-    |> Macro.to_string()
-    |> Code.format_string!()
-    |> IO.iodata_to_binary()
+    |> Sourceror.to_string()
   end
+
+  # Sourceror wraps string literals with metadata: {:__block__, meta, [""]}
+  # Match both the wrapped and bare forms.
+  defp empty_string?(""), do: true
+  defp empty_string?({:__block__, _, [""]}), do: true
+  defp empty_string?(_), do: false
 
   defp build_issue(meta) do
     %Issue{
