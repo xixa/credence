@@ -53,14 +53,15 @@ defmodule Credence.Pattern do
 
         case Code.string_to_quoted(source) do
           {:ok, ast} ->
-            issues = rule.check(ast, opts)
+            check_opts = Keyword.put(opts, :source, source)
+            issues = rule.check(ast, check_opts)
 
             if issues != [] do
               Logger.debug(
                 "[credence_fix] #{name}: check found #{length(issues)} issue(s), running fix..."
               )
 
-              fixed = rule.fix(source, opts)
+              fixed = rule.fix(source, check_opts)
 
               if fixed == source do
                 Logger.debug("[credence_fix] #{name}: fix returned IDENTICAL source (no change)")

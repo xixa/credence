@@ -68,9 +68,7 @@ defmodule Credence.Semantic.UsedUnderscoreVariable do
     {clause_start, clause_end} = find_clause_bounds(lines, target_idx)
 
     pattern =
-      Regex.compile!(
-        "(?<![a-zA-Z0-9_?!])" <> Regex.escape(old) <> "(?![a-zA-Z0-9_?!])"
-      )
+      Regex.compile!("(?<![a-zA-Z0-9_?!])" <> Regex.escape(old) <> "(?![a-zA-Z0-9_?!])")
 
     lines
     |> Enum.with_index()
