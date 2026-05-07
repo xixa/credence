@@ -343,6 +343,108 @@ defmodule Credence.Pattern.PreferHeredocForMultiLineDocTest do
       assert fixed =~ "  - target: the char"
       refute fixed =~ "\\n"
     end
+
+    test "does not corrupt already-correct heredoc (AST path)" do
+      # This is the exact scenario from the pipeline: the LLM generates
+      # properly formatted heredoc code, and the fixer must leave it alone.
+      code = ~S'''
+      defmodule Palindrome do
+        @doc """
+        Checks if a given string is a palindrome.
+
+        ## Examples
+
+            iex> Palindrome.palindrome?("racecar")
+            true
+        """
+        @spec palindrome?(String.t()) :: boolean()
+        def palindrome?(s), do: s == String.reverse(s)
+      end
+      '''
+
+      assert fix(code) == code
+    end
+
+    test "does not corrupt heredoc with iex examples and type specs" do
+      code = ~S'''
+      defmodule MissingNumber do
+        @doc """
+        Finds the missing number in a sequence from 0 to n.
+
+        ## Examples
+
+            iex> MissingNumber.missing_number([9,6,4,2,3,5,7,0,1])
+            8
+
+            iex> MissingNumber.missing_number([0,1])
+            2
+        """
+        @spec missing_number(list(integer())) :: integer()
+        def missing_number(numbers), do: 0
+      end
+      '''
+
+      assert fix(code) == code
+    end
+
+    test "does not corrupt heredoc @moduledoc" do
+      code = ~S'''
+      defmodule MyApp do
+        @moduledoc """
+        Application entry point.
+
+        Handles startup and configuration.
+        """
+
+        def start, do: :ok
+      end
+      '''
+
+      assert fix(code) == code
+    end
+
+    test "heredoc body lines are indented at least as much as closing delimiter" do
+      code = """
+      defmodule Example do
+        @doc "Summary line.\\n\\n## Details\\n\\nSome explanation here."
+        def foo, do: :ok
+      end
+      """
+
+      fixed = fix(code)
+      lines = String.split(fixed, "\n")
+
+      # Find opening @doc """ and closing """ lines
+      opening_idx = Enum.find_index(lines, &String.contains?(&1, ~S|@doc """|))
+      assert opening_idx != nil, "Expected to find opening @doc \"\"\""
+
+      closing_idx =
+        Enum.find_index(lines, fn line ->
+          idx = Enum.find_index(lines, &(&1 == line))
+          idx > opening_idx and String.trim(line) == ~S|"""|
+        end)
+
+      assert closing_idx != nil, "Expected to find closing \"\"\""
+
+      closing_indent =
+        lines
+        |> Enum.at(closing_idx)
+        |> then(fn line -> String.length(line) - String.length(String.trim_leading(line)) end)
+
+      # Every non-blank body line must be indented >= closing """
+      (opening_idx + 1)..(closing_idx - 1)
+      |> Enum.each(fn i ->
+        line = Enum.at(lines, i)
+
+        unless line == "" do
+          body_indent = String.length(line) - String.length(String.trim_leading(line))
+
+          assert body_indent >= closing_indent,
+                 "Line #{i} #{inspect(line)} has indent #{body_indent}, " <>
+                   "expected >= #{closing_indent} (closing \"\"\" indent)"
+        end
+      end)
+    end
   end
 
   defp check_with_source(code) do
@@ -415,6 +517,48 @@ defmodule Credence.Pattern.PreferHeredocForMultiLineDocTest do
 
       assert Enum.any?(issues, &(&1.rule == :prefer_heredoc_for_multi_line_doc)),
              "Single-line @doc with \\n should be flagged"
+    end
+  end
+
+  describe "fix/2 — mixed heredoc and single-line in same file" do
+    test "fixes single-line string without corrupting existing heredoc" do
+      # This tests the scenario where one function already has a heredoc
+      # and another has a single-line string with \n escapes.
+      code = ~S'''
+      defmodule Example do
+        @moduledoc """
+        This module does things.
+
+        It has multiple functions.
+        """
+
+        @doc "Func one.\nWith details."
+        def foo, do: :ok
+
+        @doc """
+        Already a heredoc.
+
+        Leave this alone.
+        """
+        def bar, do: :ok
+      end
+      '''
+
+      fixed = fix(code)
+
+      # The single-line @doc should be converted
+      assert fixed =~ "  Func one."
+      assert fixed =~ "  With details."
+
+      # The existing heredoc and moduledoc must survive intact
+      assert fixed =~ "This module does things."
+      assert fixed =~ "It has multiple functions."
+      assert fixed =~ "Already a heredoc."
+      assert fixed =~ "Leave this alone."
+
+      # The @spec / def lines must not shift around
+      assert fixed =~ "def foo, do: :ok"
+      assert fixed =~ "def bar, do: :ok"
     end
   end
 end

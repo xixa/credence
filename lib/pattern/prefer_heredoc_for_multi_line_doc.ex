@@ -205,20 +205,27 @@ defmodule Credence.Pattern.PreferHeredocForMultiLineDoc do
 
   defp fix_doc_node({:@, meta, [{attr, attr_meta, [{:__block__, str_meta, [value]}]}]} = node)
        when attr in @doc_attrs and is_binary(value) do
-    cond do
-      raw_multi_line?(value) ->
-        content = unescape_value(value)
-        content = String.trim_trailing(content, "\n")
-        new_str_meta = Keyword.put(str_meta, :delimiter, ~s("""))
-        {:@, meta, [{attr, attr_meta, [{:__block__, new_str_meta, [content]}]}]}
+    # Already a heredoc — leave it alone.  Sourceror records the delimiter
+    # in the string block's metadata; re-processing a heredoc through
+    # Sourceror.to_string corrupts indentation and destroys the file.
+    if Keyword.get(str_meta, :delimiter) == ~s(""") do
+      node
+    else
+      cond do
+        raw_multi_line?(value) ->
+          content = unescape_value(value)
+          content = String.trim_trailing(content, "\n")
+          new_str_meta = Keyword.put(str_meta, :delimiter, ~s("""))
+          {:@, meta, [{attr, attr_meta, [{:__block__, new_str_meta, [content]}]}]}
 
-      real_multi_line?(value) ->
-        content = String.trim_trailing(value, "\n")
-        new_str_meta = Keyword.put(str_meta, :delimiter, ~s("""))
-        {:@, meta, [{attr, attr_meta, [{:__block__, new_str_meta, [content]}]}]}
+        real_multi_line?(value) ->
+          content = String.trim_trailing(value, "\n")
+          new_str_meta = Keyword.put(str_meta, :delimiter, ~s("""))
+          {:@, meta, [{attr, attr_meta, [{:__block__, new_str_meta, [content]}]}]}
 
-      true ->
-        node
+        true ->
+          node
+      end
     end
   end
 
@@ -227,9 +234,11 @@ defmodule Credence.Pattern.PreferHeredocForMultiLineDoc do
   defp has_fixable_multi_line_doc?(ast) do
     {_ast, found} =
       Macro.prewalk(ast, false, fn
-        {:@, _, [{attr, _, [{:__block__, _, [value]}]}]} = node, acc
+        {:@, _, [{attr, _, [{:__block__, str_meta, [value]}]}]} = node, acc
         when attr in @doc_attrs and is_binary(value) ->
-          {node, acc or raw_multi_line?(value) or real_multi_line?(value)}
+          already_heredoc = Keyword.get(str_meta, :delimiter) == ~s(""")
+          needs_fix = not already_heredoc and (raw_multi_line?(value) or real_multi_line?(value))
+          {node, acc or needs_fix}
 
         node, acc ->
           {node, acc}
