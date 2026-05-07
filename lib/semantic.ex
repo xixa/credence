@@ -40,8 +40,6 @@ defmodule Credence.Semantic do
     end
   end
 
-  # ── Compilation ─────────────────────────────────────────────────
-
   defp compile_and_capture(source) do
     {result, diagnostics} =
       Code.with_diagnostics(fn ->
@@ -68,8 +66,6 @@ defmodule Credence.Semantic do
       :code.delete(mod)
     end
   end
-
-  # ── Rule dispatch ───────────────────────────────────────────────
 
   defp match_rules(diagnostic) do
     case find_matching_rule(diagnostic) do

@@ -8,8 +8,6 @@ defmodule Credence.RuleHelpers do
 
   require Logger
 
-  # ── Rule discovery ───────────────────────────────────────────────
-
   @doc """
   Returns all modules implementing `behaviour`, sorted by priority
   (lower first) with module name as tiebreaker for determinism.
@@ -32,8 +30,6 @@ defmodule Credence.RuleHelpers do
     behaviour in Keyword.get(module.__info__(:attributes), :behaviour, [])
   end
 
-  # ── Rule naming ──────────────────────────────────────────────────
-
   @doc """
   Returns the short name of a rule module for logging.
 
@@ -44,8 +40,6 @@ defmodule Credence.RuleHelpers do
   def rule_name(module) do
     module |> Module.split() |> List.last()
   end
-
-  # ── Diff ─────────────────────────────────────────────────────────
 
   @doc """
   Computes a line-by-line diff between two strings.

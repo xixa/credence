@@ -96,8 +96,6 @@ defmodule Credence.Pattern do
     {code, applied}
   end
 
-  # ── Rule discovery ───────────────────────────────────────────────
-
   defp rules(opts) do
     Keyword.get(opts, :rules, default_rules())
   end
