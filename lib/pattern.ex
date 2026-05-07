@@ -8,6 +8,7 @@ defmodule Credence.Pattern do
   """
 
   require Logger
+  alias Credence.RuleHelpers
 
   @spec analyze(String.t(), keyword()) :: [Credence.Issue.t()]
   def analyze(code_string, opts \\ []) do
@@ -48,7 +49,7 @@ defmodule Credence.Pattern do
 
     {code, applied} =
       Enum.reduce(fixable, {code_string, []}, fn rule, {source, applied} ->
-        rule_name = rule |> Module.split() |> List.last()
+        name = RuleHelpers.rule_name(rule)
 
         case Code.string_to_quoted(source) do
           {:ok, ast} ->
@@ -56,17 +57,17 @@ defmodule Credence.Pattern do
 
             if issues != [] do
               Logger.debug(
-                "[credence_fix] #{rule_name}: check found #{length(issues)} issue(s), running fix..."
+                "[credence_fix] #{name}: check found #{length(issues)} issue(s), running fix..."
               )
 
               fixed = rule.fix(source, opts)
 
               if fixed == source do
                 Logger.debug(
-                  "[credence_fix] #{rule_name}: fix returned IDENTICAL source (no change)"
+                  "[credence_fix] #{name}: fix returned IDENTICAL source (no change)"
                 )
               else
-                log_diff(rule_name, source, fixed)
+                RuleHelpers.log_diff(name, source, fixed)
               end
 
               {fixed, [{rule, length(issues)} | applied]}
@@ -76,7 +77,7 @@ defmodule Credence.Pattern do
 
           {:error, reason} ->
             Logger.debug(
-              "[credence_fix] source no longer parses at #{rule_name}: #{inspect(reason)}"
+              "[credence_fix] source no longer parses at #{name}: #{inspect(reason)}"
             )
 
             {source, applied}
@@ -87,52 +88,12 @@ defmodule Credence.Pattern do
 
     summary =
       Enum.map_join(applied, ", ", fn {mod, count} ->
-        "#{mod |> Module.split() |> List.last()}(#{count})"
+        "#{RuleHelpers.rule_name(mod)}(#{count})"
       end)
 
     Logger.debug("[credence_fix] done. Applied: [#{summary}]")
 
     {code, applied}
-  end
-
-  # ── Diff helper ──────────────────────────────────────────────────
-
-  defp log_diff(rule_name, before, after_fix) do
-    before_lines = String.split(before, "\n")
-    after_lines = String.split(after_fix, "\n")
-
-    changes =
-      diff_lines(before_lines, after_lines)
-      |> Enum.take(10)
-
-    change_summary =
-      Enum.map_join(changes, "\n", fn
-        {:removed, line_no, text} -> "  L#{line_no} - #{String.trim(text)}"
-        {:added, line_no, text} -> "  L#{line_no} + #{String.trim(text)}"
-      end)
-
-    more =
-      if length(diff_lines(before_lines, after_lines)) > 10,
-        do: "\n  ... (#{length(diff_lines(before_lines, after_lines)) - 10} more changes)",
-        else: ""
-
-    Logger.debug("[credence_fix] #{rule_name}: source CHANGED:\n#{change_summary}#{more}")
-  end
-
-  defp diff_lines(before_lines, after_lines) do
-    max_len = max(length(before_lines), length(after_lines))
-
-    Enum.flat_map(0..(max_len - 1), fn i ->
-      b = Enum.at(before_lines, i)
-      a = Enum.at(after_lines, i)
-
-      cond do
-        b == a -> []
-        is_nil(a) -> [{:removed, i + 1, b}]
-        is_nil(b) -> [{:added, i + 1, a}]
-        true -> [{:removed, i + 1, b}, {:added, i + 1, a}]
-      end
-    end)
   end
 
   # ── Rule discovery ───────────────────────────────────────────────
@@ -143,13 +104,7 @@ defmodule Credence.Pattern do
 
   @doc false
   def default_rules do
-    Application.spec(:credence, :modules)
-    |> Enum.filter(&implements?(&1, Credence.Pattern.Rule))
-    |> Enum.sort_by(&{&1.priority(), &1})
-  end
-
-  defp implements?(module, behaviour) do
-    behaviour in Keyword.get(module.__info__(:attributes), :behaviour, [])
+    RuleHelpers.discover_rules(Credence.Pattern.Rule)
   end
 
   defp parse_error_issue(line, error_msg, token) do

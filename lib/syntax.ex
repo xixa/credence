@@ -6,6 +6,8 @@ defmodule Credence.Syntax do
   implementing `Credence.Syntax.Rule` behaviour.
   """
 
+  alias Credence.RuleHelpers
+
   @spec analyze(String.t(), keyword()) :: [Credence.Issue.t()]
   def analyze(source, _opts \\ []) do
     case Code.string_to_quoted(source) do
@@ -32,12 +34,6 @@ defmodule Credence.Syntax do
   end
 
   defp rules do
-    Application.spec(:credence, :modules)
-    |> Enum.filter(&implements?(&1, Credence.Syntax.Rule))
-    |> Enum.sort_by(&{&1.priority(), &1})
-  end
-
-  defp implements?(module, behaviour) do
-    behaviour in Keyword.get(module.__info__(:attributes), :behaviour, [])
+    RuleHelpers.discover_rules(Credence.Syntax.Rule)
   end
 end
