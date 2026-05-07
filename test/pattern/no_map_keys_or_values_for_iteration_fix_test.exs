@@ -117,21 +117,21 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "Map.keys |> Enum.map(fn)" do
       assert_fix(
         "Map.keys(map) |> Enum.map(fn k -> to_string(k) end)",
-        "map |> Enum.map(fn {_k, k} -> to_string(k) end)"
+        "Enum.map(map, fn {_k, k} -> to_string(k) end)"
       )
     end
 
     test "Map.keys |> Enum.map(&func/1)" do
       assert_fix(
         "Map.keys(map) |> Enum.map(&to_string/1)",
-        "map |> Enum.map(fn {_k, x} -> to_string(x) end)"
+        "Enum.map(map, fn {_k, x} -> to_string(x) end)"
       )
     end
 
     test "triple pipe: map |> Map.values() |> Enum.map" do
       assert_fix(
         "map |> Map.values() |> Enum.map(fn v -> v + 1 end)",
-        "map |> Enum.map(fn {_k, v} -> v + 1 end)"
+        "Enum.map(map, fn {_k, v} -> v + 1 end)"
       )
     end
   end
@@ -165,7 +165,7 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "pipe: Map.values |> Enum.reduce" do
       assert_fix(
         "Map.values(m) |> Enum.reduce(0, fn v, acc -> v + acc end)",
-        "m |> Enum.reduce(0, fn {_k, v}, acc -> v + acc end)"
+        "Enum.reduce(m, 0, fn {_k, v}, acc -> v + acc end)"
       )
     end
   end
@@ -184,11 +184,11 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     end
 
     test "pipe: Map.values |> Enum.count()" do
-      assert_fix("Map.values(map) |> Enum.count()", "map |> Enum.count()")
+      assert_fix("Map.values(map) |> Enum.count()", "Enum.count(map)")
     end
 
     test "triple pipe: map |> Map.keys() |> Enum.count()" do
-      assert_fix("map |> Map.keys() |> Enum.count()", "map |> Enum.count()")
+      assert_fix("map |> Map.keys() |> Enum.count()", "Enum.count(map)")
     end
 
     test "Enum.empty?(Map.values(m))" do
@@ -236,14 +236,14 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "pipe: Map.values |> Enum.max()" do
       assert_fix(
         "Map.values(map) |> Enum.max()",
-        "map |> Enum.max_by(fn {_, v} -> v end) |> elem(1)"
+        "Enum.max_by(map, fn {_, v} -> v end) |> elem(1)"
       )
     end
 
     test "triple pipe: map |> Map.values() |> Enum.max()" do
       assert_fix(
         "map |> Map.values() |> Enum.max()",
-        "map |> Enum.max_by(fn {_, v} -> v end) |> elem(1)"
+        "Enum.max_by(map, fn {_, v} -> v end) |> elem(1)"
       )
     end
   end
@@ -270,14 +270,14 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "pipe: Map.values |> Enum.sum()" do
       assert_fix(
         "Map.values(map) |> Enum.sum()",
-        "map |> Enum.reduce(0, fn {_k, v}, acc -> acc + v end)"
+        "Enum.reduce(map, 0, fn {_k, v}, acc -> acc + v end)"
       )
     end
 
     test "triple pipe: map |> Map.values() |> Enum.sum()" do
       assert_fix(
         "map |> Map.values() |> Enum.sum()",
-        "map |> Enum.reduce(0, fn {_k, v}, acc -> acc + v end)"
+        "Enum.reduce(map, 0, fn {_k, v}, acc -> acc + v end)"
       )
     end
   end
@@ -360,7 +360,7 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "pipe: Map.keys |> Enum.random()" do
       assert_fix(
         "Map.keys(map) |> Enum.random()",
-        "map |> Enum.random() |> elem(0)"
+        "Enum.random(map) |> elem(0)"
       )
     end
   end
@@ -431,14 +431,14 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "pipe: Map.values |> Enum.filter" do
       assert_fix(
         "Map.values(m) |> Enum.filter(fn v -> v > 0 end)",
-        "m |> Enum.filter(fn {_k, v} -> v > 0 end) |> Enum.map(fn {_, v} -> v end)"
+        "Enum.map(Enum.filter(m, fn {_k, v} -> v > 0 end), fn {_, v} -> v end)"
       )
     end
 
     test "triple pipe: m |> Map.values() |> Enum.filter" do
       assert_fix(
         "m |> Map.values() |> Enum.filter(fn v -> v > 0 end)",
-        "m |> Enum.filter(fn {_k, v} -> v > 0 end) |> Enum.map(fn {_, v} -> v end)"
+        "Enum.map(Enum.filter(m, fn {_k, v} -> v > 0 end), fn {_, v} -> v end)"
       )
     end
   end
@@ -486,14 +486,14 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "pipe: Map.values |> Enum.sort()" do
       assert_fix(
         "Map.values(map) |> Enum.sort()",
-        "map |> Enum.sort_by(fn {_, v} -> v end) |> Enum.map(fn {_, v} -> v end)"
+        "Enum.map(Enum.sort_by(map, fn {_, v} -> v end), fn {_, v} -> v end)"
       )
     end
 
     test "pipe: Map.values |> Enum.sort(:desc)" do
       assert_fix(
         "Map.values(map) |> Enum.sort(:desc)",
-        "map |> Enum.sort_by(fn {_, v} -> v end, :desc) |> Enum.map(fn {_, v} -> v end)"
+        "Enum.map(Enum.sort_by(map, fn {_, v} -> v end, :desc), fn {_, v} -> v end)"
       )
     end
   end
@@ -534,7 +534,7 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "pipe: Map.values |> Enum.uniq()" do
       assert_fix(
         "Map.values(map) |> Enum.uniq()",
-        "map |> Enum.uniq_by(fn {_, v} -> v end) |> Enum.map(fn {_, v} -> v end)"
+        "Enum.map(Enum.uniq_by(map, fn {_, v} -> v end), fn {_, v} -> v end)"
       )
     end
   end
@@ -575,7 +575,7 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
     test "pipe: Map.values |> Enum.take(3)" do
       assert_fix(
         "Map.values(map) |> Enum.take(3)",
-        "map |> Enum.take(3) |> Enum.map(fn {_, v} -> v end)"
+        "Enum.map(Enum.take(map, 3), fn {_, v} -> v end)"
       )
     end
   end
@@ -658,10 +658,17 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIterationFixTest do
       )
     end
 
-    test "complex capture &(&1 + 1) passed through" do
+    test "complex capture &(&1 + 1) is converted and wrapped" do
       assert_fix(
         "Enum.map(Map.values(m), &(&1 + 1))",
-        "Enum.map(m, &(&1 + 1))"
+        "Enum.map(m, fn {_k, x} -> x + 1 end)"
+      )
+    end
+
+    test "complex piped capture &(&1 + 1) is converted and wrapped" do
+      assert_fix(
+        "m |> Map.values() |> Enum.map(&(&1 + 1))",
+        "Enum.map(m, fn {_k, x} -> x + 1 end)"
       )
     end
   end

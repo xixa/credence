@@ -310,8 +310,20 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIteration do
   # ═══════════════════════════════════════════════════════════════════
 
   defp fix_pipe(f, pm, mfunc, ma, ea) do
-    mk = &pe(pm, ma, &1, &2)
-    mk2 = &pe(pm, &1, &2, &3)
+    # Build Enum call: collapses to nested when ma isn't itself a pipe
+    mk = fn func, args ->
+      case ma do
+        {:|>, _, _} -> pe(pm, ma, func, args)
+        _ -> sn(func, [ma | args])
+      end
+    end
+
+    mk2 = fn lhs, func, args ->
+      case lhs do
+        {:|>, _, _} -> pe(pm, lhs, func, args)
+        _ -> sn(func, [lhs | args])
+      end
+    end
 
     # 1) Wrap any lambda/capture callbacks in ea
     orig_ea = ea
@@ -454,11 +466,18 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIteration do
   # callback wrapping
   # ═══════════════════════════════════════════════════════════════════
 
-  # Walk a list of args and wrap any lambdas or &func/1 captures
+  # Walk a list of args and wrap any lambdas or captures
   defp wrap_fns(args) do
     Enum.map(args, fn
       {:fn, _, _} = cb -> wrap_cb(cb)
       {:&, _, [{:/, _, [_, 1]}]} = cb -> wrap_cb(cb)
+      {:&, _, [_]} = cb ->
+        # Complex capture like &(length(&1) > 1) — convert to fn first
+        case capture_to_fn(cb) do
+          {:fn, _, _} = converted -> wrap_cb(converted)
+          _ -> cb
+        end
+
       other -> other
     end)
   end
@@ -477,6 +496,35 @@ defmodule Credence.Pattern.NoMapKeysOrValuesForIteration do
   defp wrap_cb({:&, cm, [{:/, _, [ref, 1]}]}) do
     var = {:x, [], nil}
     {:fn, cm, [{:->, [], [[df(var)], rebuild_call(ref, var)]}]}
+  end
+
+  # &(expr using &1) → fn x -> expr end
+  # Converts a complex capture into a fn so wrap_cb can destructure it.
+  # Returns the original capture unchanged if it uses &2+ (multi-arity).
+  defp capture_to_fn({:&, cm, [body]}) do
+    if uses_higher_capture?(body) do
+      {:&, cm, [body]}
+    else
+      var = {:x, [], nil}
+
+      new_body =
+        Macro.prewalk(body, fn
+          {:&, _, [1]} -> var
+          node -> node
+        end)
+
+      {:fn, cm, [{:->, [], [[var], new_body]}]}
+    end
+  end
+
+  defp uses_higher_capture?(ast) do
+    {_, found} =
+      Macro.prewalk(ast, false, fn
+        {:&, _, [n]} = node, _acc when is_integer(n) and n > 1 -> {node, true}
+        node, acc -> {node, acc}
+      end)
+
+    found
   end
 
   # fn(a, b) -> body → fn({_, a}, {_, b}) -> body  (for sort/2 comparators)
