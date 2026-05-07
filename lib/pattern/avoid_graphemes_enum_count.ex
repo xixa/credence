@@ -84,8 +84,6 @@ defmodule Credence.Pattern.AvoidGraphemesEnumCount do
     |> Sourceror.to_string()
   end
 
-  # ── Fix helpers ───────────────────────────────────────────────
-
   # String.graphemes(x) |> Enum.count() → String.length(x)
   defp fix_pipe({{:., _, [{:__aliases__, _, [:String]}, :graphemes]}, _, [subject]}) do
     string_length_call(subject)
@@ -111,8 +109,6 @@ defmodule Credence.Pattern.AvoidGraphemesEnumCount do
     {{:., [], [{:__aliases__, [], [:String]}, :length]}, [], [subject]}
   end
 
-  # ── Detection helpers ─────────────────────────────────────────
-
   defp extract_graphemes_arg({{:., _, [{:__aliases__, _, [:String]}, :graphemes]}, _, [subject]}),
     do: {:ok, subject}
 
@@ -133,16 +129,28 @@ defmodule Credence.Pattern.AvoidGraphemesEnumCount do
 
   defp graphemes_call?(_), do: false
 
-  # ── Issue ─────────────────────────────────────────────────────
-
-  defp build_issue(meta) do
+defp build_issue(meta) do
     %Issue{
       rule: :avoid_graphemes_enum_count,
       message: """
-      Use `String.length/1` instead of `Enum.count(String.graphemes(...))`.
+      `String.graphemes/1 |> Enum.count()` allocates an intermediate list of \
+      every grapheme in the string just to count them. `String.length/1` does \
+      the same count in O(n) time without allocating the list.
 
-      Counting graphemes via `Enum.count/1` forces allocation of an
-      intermediate list, while `String.length/1` avoids this.
+      Replace the pattern with `String.length/1`:
+
+          # Before (allocates a list):
+          String.graphemes(str) |> Enum.count()
+          Enum.count(String.graphemes(str))
+          str |> String.graphemes() |> Enum.count()
+
+          # After (no intermediate list):
+          String.length(str)
+
+          # In a pipeline, replace the last two steps:
+          str |> String.trim() |> String.graphemes() |> Enum.count()
+          # becomes:
+          str |> String.trim() |> String.length()
       """,
       meta: %{line: Keyword.get(meta, :line)}
     }
