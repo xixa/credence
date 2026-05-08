@@ -19,7 +19,8 @@ defmodule Credence.Semantic.UndefinedFunction do
   # Map of {module, function, arity} → {correct_module, correct_function}
   @replacements %{
     {"Enum", "last", 1} => {"List", "last"},
-    {"Enum", "last", 0} => {"List", "last"}
+    {"Enum", "last", 0} => {"List", "last"},
+    {"List", "reverse", 1} => {"Enum", "reverse"}
   }
 
   @impl true
