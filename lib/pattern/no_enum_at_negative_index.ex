@@ -106,8 +106,8 @@ defmodule Credence.Pattern.NoEnumAtNegativeIndex do
       |> apply_actions(actions)
       |> Enum.join("\n")
 
-    # Step 8: Fix remaining non-assignment Enum.at(x, -1) via targeted line regex
-    fix_remaining_minus_one(result)
+    # Step 8: Fix remaining Enum.at(x, -N) in expression context
+    fix_remaining_negative_indices(result)
   end
 
   # ── Negative index extraction ──────────────────────────────────────
@@ -317,60 +317,99 @@ defmodule Credence.Pattern.NoEnumAtNegativeIndex do
     end)
   end
 
-  # ── Remaining inline -1 fix ────────────────────────────────────────
+  # ── Remaining negative index fix ─────────────────────────────────
 
-  # Handle non-assignment Enum.at(x, -1) calls that weren't caught above
-  defp fix_remaining_minus_one(source) do
-    case Sourceror.parse_string(source) do
-      {:ok, ast} ->
-        remaining_lines = find_minus_one_lines(ast)
+  # Handle Enum.at(var, -N) calls that weren't caught by the assignment-form
+  # fix above. This covers expression contexts like:
+  #   result = Enum.at(sorted, -1) * Enum.at(sorted, -2)
+  # and piped forms like:
+  #   list |> Enum.sort() |> Enum.at(-1)
 
-        if remaining_lines == [] do
-          source
-        else
-          line_set = MapSet.new(remaining_lines)
+  defp fix_remaining_negative_indices(source) do
+    source
+    |> fix_piped_minus_one()
+    |> fix_direct_negative()
+  end
 
-          source
-          |> String.split("\n")
-          |> Enum.with_index(1)
-          |> Enum.map(fn {line, idx} ->
-            if idx in line_set, do: fix_minus_one_in_line(line), else: line
-          end)
-          |> Enum.join("\n")
-        end
+  # Pass 1: Piped |> Enum.at(-1) → |> List.last()
+  defp fix_piped_minus_one(source) do
+    source
+    |> String.split("\n")
+    |> Enum.map(fn line ->
+      if String.trim(line) |> String.starts_with?("#") do
+        line
+      else
+        Regex.replace(~r/\|>\s*Enum\.at\(\s*-1\s*\)/, line, "|> List.last()")
+      end
+    end)
+    |> Enum.join("\n")
+  end
 
-      {:error, _} ->
-        source
+  # Pass 2: Direct-call Enum.at(var, -N) in expression context
+  defp fix_direct_negative(source) do
+    source
+    |> String.split("\n")
+    |> Enum.flat_map(fn line ->
+      if String.trim(line) |> String.starts_with?("#") do
+        [line]
+      else
+        process_direct_negative(line)
+      end
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp process_direct_negative(line) do
+    matches = Regex.scan(~r/Enum\.at\((\w+),\s*-(\d+)\)/, line)
+
+    if matches == [] do
+      [line]
+    else
+      by_var = Enum.group_by(matches, fn [_, var, _] -> var end)
+
+      {result_line, prepend_lines} =
+        Enum.reduce(by_var, {line, []}, fn {var, var_matches}, {current_line, prepends} ->
+          indices =
+            var_matches
+            |> Enum.map(fn [_, _, n] -> String.to_integer(n) end)
+            |> Enum.sort()
+
+          max_depth = Enum.max(indices)
+
+          if max_depth == 1 and length(indices) == 1 do
+            # Single -1: replace with List.last
+            new_line =
+              Regex.replace(~r/Enum\.at\(#{var},\s*-1\)/, current_line, "List.last(#{var})")
+
+            {new_line, prepends}
+          else
+            # Deep indices: reverse + pattern match + substitute
+            indent = extract_indent(current_line)
+            reversed_var = "#{var}_reversed"
+
+            elements =
+              for pos <- 1..max_depth do
+                if pos in indices, do: "#{var}_neg#{pos}", else: "_"
+              end
+
+            pattern = "[#{Enum.join(elements, ", ")} | _]"
+
+            new_prepends = [
+              "#{indent}#{reversed_var} = Enum.reverse(#{var})",
+              "#{indent}#{pattern} = #{reversed_var}"
+            ]
+
+            new_line =
+              Enum.reduce(indices, current_line, fn n, acc ->
+                Regex.replace(~r/Enum\.at\(#{var},\s*-#{n}\)/, acc, "#{var}_neg#{n}")
+              end)
+
+            {new_line, prepends ++ new_prepends}
+          end
+        end)
+
+      prepend_lines ++ [result_line]
     end
-  end
-
-  defp find_minus_one_lines(ast) do
-    {_ast, lines} =
-      Macro.prewalk(ast, [], fn
-        {{:., _, [{:__aliases__, _, [:Enum]}, :at]}, meta, [_, idx_node]} = node, acc ->
-          case extract_negative_index(idx_node) do
-            {:ok, -1} -> {node, [Keyword.get(meta, :line) | acc]}
-            _ -> {node, acc}
-          end
-
-        {:|>, _, [_, {{:., _, [{:__aliases__, _, [:Enum]}, :at]}, meta, [idx_node]}]} = node,
-        acc ->
-          case extract_negative_index(idx_node) do
-            {:ok, -1} -> {node, [Keyword.get(meta, :line) | acc]}
-            _ -> {node, acc}
-          end
-
-        node, acc ->
-          {node, acc}
-      end)
-
-    Enum.uniq(lines)
-  end
-
-  defp fix_minus_one_in_line(line) do
-    line
-    |> then(&Regex.replace(~r/\|>\s*Enum\.at\(\s*-1\s*\)/, &1, "|> List.last()"))
-    |> then(&Regex.replace(~r/Enum\.at\((\w+),\s*-1\)/, &1, "List.last(\\1)"))
   end
 
   # ── Helpers ─────────────────────────────────────────────────────────
