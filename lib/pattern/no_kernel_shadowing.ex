@@ -1,16 +1,13 @@
 defmodule Credence.Pattern.NoKernelShadowing do
   @moduledoc """
-  Idiomatic rule: warns when variables shadow `Kernel` functions.
+  Idiomatic rule: fixes variables that shadow `Kernel` functions.
 
   Using `max` or `min` as variable names (e.g., in `Enum.reduce` or function
-  arguments) shadows the built-in Kernel functions.
+  arguments) shadows the built-in Kernel functions. While `max(max, value)` is
+  valid Elixir, it is unidiomatic and can lead to confusion.
 
-  While `max(max, value)` is valid Elixir, it is considered unidiomatic and
-  can lead to confusion or subtle bugs.
-
-  Prefer:
-    - `max_val`, `global_max`, or `limit` instead of `max`
-    - `min_val`, `local_min`, or `bottom` instead of `min`
+  This rule renames shadowing variables to descriptive alternatives:
+  `max` → `max_value`, `min` → `min_value`, `hd` → `head`, etc.
   """
 
   use Credence.Pattern.Rule
@@ -33,6 +30,27 @@ defmodule Credence.Pattern.NoKernelShadowing do
     :byte_size,
     :bit_size
   ]
+
+  @renames %{
+    max: :max_value,
+    min: :min_value,
+    elem: :element,
+    hd: :head,
+    tl: :tail,
+    length: :count,
+    abs: :abs_value,
+    round: :rounded,
+    trunc: :truncated,
+    div: :quotient,
+    rem: :remainder,
+    tuple_size: :tuple_len,
+    map_size: :map_len,
+    byte_size: :num_bytes,
+    bit_size: :num_bits
+  }
+
+  @impl true
+  def fixable?, do: true
 
   @impl true
   def check(ast, _opts) do
@@ -64,6 +82,20 @@ defmodule Credence.Pattern.NoKernelShadowing do
       end)
 
     Enum.reverse(issues)
+  end
+
+  @impl true
+  def fix(source, _opts) do
+    source
+    |> Sourceror.parse_string!()
+    |> Macro.postwalk(fn
+      {name, meta, ctx} when name in @shadowed and is_atom(ctx) ->
+        {Map.get(@renames, name, :"#{name}_value"), meta, ctx}
+
+      node ->
+        node
+    end)
+    |> Sourceror.to_string()
   end
 
   # --- Helpers ---
