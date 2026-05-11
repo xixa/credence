@@ -2,12 +2,8 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
   use ExUnit.Case
 
   defp fix(code) do
-    Credence.Pattern.NoCaseTrueFalse.fix(code, [])
-  end
-
-  # Helper: normalise whitespace for structural comparison
-  defp normalize(code) do
-    code |> String.trim() |> String.replace(~r/\s+/, " ")
+    result = Credence.Pattern.NoCaseTrueFalse.fix(code, [])
+    if String.ends_with?(result, "\n"), do: result, else: result <> "\n"
   end
 
   # ═══════════════════════════════════════════════════════════════════
@@ -23,14 +19,15 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      assert fixed =~ "if"
-      assert fixed =~ "else"
-      assert fixed =~ ":positive"
-      assert fixed =~ ":non_positive"
-      # true body is in the do block
-      assert normalize(fixed) =~ "if x > 0 do :positive else :non_positive end"
+      expected = """
+      if x > 0 do
+        :positive
+      else
+        :non_positive
+      end
+      """
+
+      assert fix(input) == expected
     end
 
     test "flipped false then true" do
@@ -41,10 +38,15 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      # Bodies must be swapped: true body in do, false body in else
-      assert normalize(fixed) =~ "if x > 0 do :positive else :non_positive end"
+      expected = """
+      if x > 0 do
+        :positive
+      else
+        :non_positive
+      end
+      """
+
+      assert fix(input) == expected
     end
 
     test "complex expression in subject" do
@@ -55,12 +57,15 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      assert fixed =~ "if"
-      assert fixed =~ "rem(total_count, 2) == 0"
-      assert fixed =~ "(a + b) / 2.0"
-      assert fixed =~ "mid"
+      expected = """
+      if rem(total_count, 2) == 0 do
+        (a + b) / 2.0
+      else
+        mid
+      end
+      """
+
+      assert fix(input) == expected
     end
 
     test "multi-line bodies" do
@@ -74,12 +79,16 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      assert fixed =~ "if"
-      assert fixed =~ "Map.get(map, key)"
-      assert fixed =~ "{:ok, value}"
-      assert fixed =~ "{:error, :not_found}"
+      expected = """
+      if Map.has_key?(map, key) do
+        value = Map.get(map, key)
+        {:ok, value}
+      else
+        {:error, :not_found}
+      end
+      """
+
+      assert fix(input) == expected
     end
 
     test "function call as subject" do
@@ -90,9 +99,15 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      assert fixed =~ ~s[if String.contains?(input, "needle")]
+      expected = """
+      if String.contains?(input, "needle") do
+        :found
+      else
+        :not_found
+      end
+      """
+
+      assert fix(input) == expected
     end
 
     test "nested inside a def" do
@@ -107,11 +122,19 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      assert fixed =~ "if n > 10 do"
-      assert fixed =~ "defmodule Example"
-      assert fixed =~ "def run(n)"
+      expected = """
+      defmodule Example do
+        def run(n) do
+          if n > 10 do
+            :big
+          else
+            :small
+          end
+        end
+      end
+      """
+
+      assert fix(input) == expected
     end
 
     test "fixes multiple occurrences" do
@@ -133,10 +156,27 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      assert fixed =~ "if x > 0 do"
-      assert fixed =~ "if x == 0 do"
+      expected = """
+      defmodule Example do
+        def foo(x) do
+          if x > 0 do
+            :pos
+          else
+            :neg
+          end
+        end
+
+        def bar(x) do
+          if x == 0 do
+            :zero
+          else
+            :nonzero
+          end
+        end
+      end
+      """
+
+      assert fix(input) == expected
     end
   end
 
@@ -153,9 +193,15 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      assert normalize(fixed) =~ "if x > 0 do :positive else :non_positive end"
+      expected = """
+      if x > 0 do
+        :positive
+      else
+        :non_positive
+      end
+      """
+
+      assert fix(input) == expected
     end
 
     test "false then wildcard" do
@@ -166,10 +212,15 @@ defmodule Credence.Pattern.NoCaseTrueFalseFixTest do
       end
       """
 
-      fixed = fix(input)
-      refute fixed =~ "case"
-      # false body goes to else, wildcard body goes to do
-      assert normalize(fixed) =~ "if x > 0 do :positive else :non_positive end"
+      expected = """
+      if x > 0 do
+        :positive
+      else
+        :non_positive
+      end
+      """
+
+      assert fix(input) == expected
     end
   end
 
