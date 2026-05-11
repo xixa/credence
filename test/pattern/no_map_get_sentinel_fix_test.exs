@@ -7,7 +7,7 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════
-  # BASIC FIXES — sentinel replaced with nil
+  # EQUALITY FIXES — sentinel literal swapped to nil (existing)
   # ═══════════════════════════════════════════════════════════════════
 
   describe "replaces != sentinel with != nil" do
@@ -87,10 +87,10 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════
-  # COMPOUND CONDITIONS — preserves surrounding logic
+  # EQUALITY — compound conditions
   # ═══════════════════════════════════════════════════════════════════
 
-  describe "fixes compound conditions" do
+  describe "fixes equality in compound conditions" do
     test "sentinel check with and — exact pattern from idx=11" do
       input = """
       def run(char_map, grapheme, start_index) do
@@ -120,10 +120,10 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════
-  # FLIPPED COMPARISON — sentinel on left side
+  # EQUALITY — flipped, different sentinels, multiple, module, intervening
   # ═══════════════════════════════════════════════════════════════════
 
-  describe "handles sentinel on left side of comparison" do
+  describe "handles sentinel on left side of equality" do
     test "-1 != val → nil != val" do
       input = """
       def run(map) do
@@ -160,10 +160,6 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
       assert fix(input) == expected
     end
   end
-
-  # ═══════════════════════════════════════════════════════════════════
-  # DIFFERENT SENTINELS
-  # ═══════════════════════════════════════════════════════════════════
 
   describe "handles different negative integer sentinels" do
     test "-999 sentinel" do
@@ -203,11 +199,7 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
     end
   end
 
-  # ═══════════════════════════════════════════════════════════════════
-  # MULTIPLE COMPARISONS — all replaced
-  # ═══════════════════════════════════════════════════════════════════
-
-  describe "fixes all comparisons in scope" do
+  describe "fixes all equality comparisons in scope" do
     test "both != and == against same sentinel" do
       input = """
       def run(map) do
@@ -239,10 +231,6 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
     end
   end
 
-  # ═══════════════════════════════════════════════════════════════════
-  # INSIDE A MODULE
-  # ═══════════════════════════════════════════════════════════════════
-
   describe "works inside a module" do
     test "full module context" do
       input = """
@@ -267,12 +255,8 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
     end
   end
 
-  # ═══════════════════════════════════════════════════════════════════
-  # PRESERVES INTERVENING CODE
-  # ═══════════════════════════════════════════════════════════════════
-
   describe "preserves intervening code" do
-    test "code between Map.get and comparison" do
+    test "code between Map.get and equality comparison" do
       input = """
       def run(map, threshold) do
         val = Map.get(map, :key, -1)
@@ -303,15 +287,140 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════
+  # ORDERING FIXES — nil guard added (NEW)
+  # ═══════════════════════════════════════════════════════════════════
+
+  describe "wraps ordering comparison with nil guard" do
+    test "var >= other_var — exact idx=32 pattern" do
+      input = """
+      def run(char_map, current_char, left_index) do
+        previous_position = Map.get(char_map, current_char, -1)
+        if previous_position >= left_index do
+          previous_position + 1
+        else
+          left_index
+        end
+      end
+      """
+
+      expected = """
+      def run(char_map, current_char, left_index) do
+        previous_position = Map.get(char_map, current_char)
+
+        if previous_position != nil and previous_position >= left_index do
+          previous_position + 1
+        else
+          left_index
+        end
+      end
+      """
+
+      assert fix(input) == expected
+    end
+
+    test "var > other_var" do
+      input = """
+      def run(map, threshold) do
+        val = Map.get(map, :key, -1)
+        if val > threshold, do: val, else: 0
+      end
+      """
+
+      expected = """
+      def run(map, threshold) do
+        val = Map.get(map, :key)
+        if val != nil and val > threshold, do: val, else: 0
+      end
+      """
+
+      assert fix(input) == expected
+    end
+
+    test "flipped: threshold <= var" do
+      input = """
+      def run(map, threshold) do
+        val = Map.get(map, :key, -1)
+        if threshold <= val, do: val, else: 0
+      end
+      """
+
+      expected = """
+      def run(map, threshold) do
+        val = Map.get(map, :key)
+        if val != nil and threshold <= val, do: val, else: 0
+      end
+      """
+
+      assert fix(input) == expected
+    end
+
+    test "var >= 0" do
+      input = """
+      def run(map) do
+        val = Map.get(map, :key, -1)
+        if val >= 0, do: val, else: :missing
+      end
+      """
+
+      expected = """
+      def run(map) do
+        val = Map.get(map, :key)
+        if val != nil and val >= 0, do: val, else: :missing
+      end
+      """
+
+      assert fix(input) == expected
+    end
+
+    test "multiple ordering comparisons" do
+      input = """
+      def run(map, low, high) do
+        val = Map.get(map, :key, -1)
+        if val >= low and val < high do
+          val
+        else
+          0
+        end
+      end
+      """
+
+      expected = """
+      def run(map, low, high) do
+        val = Map.get(map, :key)
+
+        if val != nil and val >= low and (val != nil and val < high) do
+          val
+        else
+          0
+        end
+      end
+      """
+
+      assert fix(input) == expected
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
   # SAFETY — must NOT modify
   # ═══════════════════════════════════════════════════════════════════
 
   describe "does not modify non-negative defaults" do
-    test "default is 0" do
+    test "default is 0 with equality" do
       input = """
       def run(map) do
         count = Map.get(map, :count, 0)
         if count != 0, do: count, else: :none
+      end
+      """
+
+      assert fix(input) == input
+    end
+
+    test "default is 0 with ordering" do
+      input = """
+      def run(map, threshold) do
+        count = Map.get(map, :count, 0)
+        if count >= threshold, do: count, else: :none
       end
       """
 
@@ -368,12 +477,24 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
   end
 
   describe "does not modify when variable is rebound" do
-    test "rebinding between Map.get and comparison" do
+    test "rebinding between Map.get and equality comparison" do
       input = """
       def run(map) do
         val = Map.get(map, :key, -1)
         val = transform(val)
         if val != -1, do: val, else: :missing
+      end
+      """
+
+      assert fix(input) == input
+    end
+
+    test "rebinding between Map.get and ordering comparison" do
+      input = """
+      def run(map, threshold) do
+        val = Map.get(map, :key, -1)
+        val = transform(val)
+        if val >= threshold, do: val, else: 0
       end
       """
 
@@ -402,7 +523,7 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
   end
 
   describe "does not modify comparison against different value" do
-    test "sentinel -1 but comparison against -2" do
+    test "sentinel -1 but equality against -2" do
       input = """
       def run(map) do
         val = Map.get(map, :key, -1)
@@ -414,12 +535,23 @@ defmodule Credence.Pattern.NoMapGetSentinelFixTest do
     end
   end
 
-  describe "does not modify comparison with wrong operator" do
-    test "uses > not ==" do
+  describe "does not modify ordering comparison against sentinel literal" do
+    test "val > -1 — directly against sentinel" do
       input = """
       def run(map) do
         val = Map.get(map, :key, -1)
         if val > -1, do: val, else: :missing
+      end
+      """
+
+      assert fix(input) == input
+    end
+
+    test "val >= -1 — directly against sentinel" do
+      input = """
+      def run(map) do
+        val = Map.get(map, :key, -1)
+        if val >= -1, do: val, else: :missing
       end
       """
 

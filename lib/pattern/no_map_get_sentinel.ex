@@ -1,20 +1,27 @@
 defmodule Credence.Pattern.NoMapGetSentinel do
   @moduledoc """
-  Detects `Map.get(map, key, -1)` followed by `var != -1` — a Python
-  `dict.get(key, -1)` idiom that leaks into LLM-generated Elixir.
+  Detects `Map.get(map, key, -1)` followed by a comparison against
+  the sentinel — a Python `dict.get(key, -1)` idiom that leaks into
+  LLM-generated Elixir.
 
   Idiomatic Elixir uses `nil` as the absence marker (the default for
   `Map.get/2`) and checks with `!= nil` or pattern-matches with
   `Map.fetch/2`.
 
-  ## Detection constraints
+  ## Detection
 
-  Only flags when ALL of:
+  Two modes:
+
+  **Equality mode** — `var == -1` / `var != -1` / `===` / `!==`
+  **Ordering mode** — `var >= expr` / `var > expr` etc. where NEITHER
+  operand is the sentinel literal and no equality check exists.
+
+  Only flags when:
   - The default is a **negative integer** literal (-1, -2, -999, etc.)
-  - The result variable is compared to that exact sentinel via `==`/`!=`/`===`/`!==`
-  - Both are in the same block with no rebinding of the variable between them
+  - The result variable appears in a matching comparison
+  - Both are in the same block with no rebinding between them
 
-  ## Bad
+  ## Bad — equality
 
       last_seen = Map.get(char_map, grapheme, -1)
       if last_seen != -1 and last_seen >= start_index do
@@ -23,7 +30,7 @@ defmodule Credence.Pattern.NoMapGetSentinel do
         start_index
       end
 
-  ## Good
+  ## Good — equality
 
       last_seen = Map.get(char_map, grapheme)
       if last_seen != nil and last_seen >= start_index do
@@ -32,16 +39,37 @@ defmodule Credence.Pattern.NoMapGetSentinel do
         start_index
       end
 
+  ## Bad — ordering
+
+      previous = Map.get(char_map, current_char, -1)
+      if previous >= left_index do
+        previous + 1
+      else
+        left_index
+      end
+
+  ## Good — ordering
+
+      previous = Map.get(char_map, current_char)
+      if previous != nil and previous >= left_index do
+        previous + 1
+      else
+        left_index
+      end
+
   ## Auto-fix
 
-  Drops the sentinel default from `Map.get` and replaces sentinel
-  comparisons with `nil`. Does not restructure control flow.
+  - **Equality:** drops the sentinel default and replaces sentinel
+    comparisons with `nil`.
+  - **Ordering:** drops the sentinel default and wraps each ordering
+    comparison with a `var != nil` guard.
   """
 
   use Credence.Pattern.Rule
   alias Credence.Issue
 
   @comparison_ops [:==, :!=, :===, :!==]
+  @ordering_ops [:>=, :>, :<=, :<]
 
   @impl true
   def fixable?, do: true
@@ -85,6 +113,8 @@ defmodule Credence.Pattern.NoMapGetSentinel do
 
   # Scans a block's statements for Map.get sentinel assignments
   # that have a matching comparison in scope.
+  # Equality comparisons take priority; ordering is only flagged
+  # when no equality check against the sentinel exists.
   defp find_sentinel_patterns(statements) do
     statements
     |> Enum.with_index()
@@ -92,17 +122,23 @@ defmodule Credence.Pattern.NoMapGetSentinel do
       case scan_map_get_sentinel(stmt) do
         {:ok, var_name, sentinel} ->
           safe_end = find_safe_end(statements, var_name, idx)
+          range = if safe_end > idx, do: Enum.slice(statements, (idx + 1)..safe_end), else: []
 
-          has_comparison =
-            safe_end > idx and
-              statements
-              |> Enum.slice((idx + 1)..safe_end)
-              |> Enum.any?(&contains_sentinel_comparison?(&1, var_name, sentinel))
+          has_equality = Enum.any?(range, &contains_sentinel_comparison?(&1, var_name, sentinel))
 
-          if has_comparison do
-            [%{var_name: var_name, sentinel: sentinel, index: idx, safe_end: safe_end}]
-          else
-            []
+          has_ordering =
+            not has_equality and
+              Enum.any?(range, &contains_ordering_comparison?(&1, var_name, sentinel))
+
+          cond do
+            has_equality ->
+              [%{var_name: var_name, sentinel: sentinel, index: idx, safe_end: safe_end, type: :equality}]
+
+            has_ordering ->
+              [%{var_name: var_name, sentinel: sentinel, index: idx, safe_end: safe_end, type: :ordering}]
+
+            true ->
+              []
           end
 
         :skip ->
@@ -173,6 +209,29 @@ defmodule Credence.Pattern.NoMapGetSentinel do
     found
   end
 
+  # Recursively checks if an AST subtree contains an ordering comparison
+  # involving var_name where NEITHER operand is the sentinel literal.
+  defp contains_ordering_comparison?(ast, var_name, sentinel) do
+    {_, found} =
+      Macro.prewalk(ast, false, fn
+        _node, true ->
+          {nil, true}
+
+        {op, _, [left, right]} = node, false when op in @ordering_ops ->
+          has_var = match_var?(left, var_name) or match_var?(right, var_name)
+
+          has_sentinel =
+            match_value?(left, sentinel) or match_value?(right, sentinel)
+
+          {node, has_var and not has_sentinel}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    found
+  end
+
   # ── Variable and value helpers ────────────────────────────────────
 
   defp plain_variable_name({name, _, context})
@@ -230,13 +289,23 @@ defmodule Credence.Pattern.NoMapGetSentinel do
 
   defp find_issues(statements) do
     find_sentinel_patterns(statements)
-    |> Enum.map(fn %{var_name: var_name, sentinel: sentinel} = pattern ->
+    |> Enum.map(fn %{var_name: var_name, sentinel: sentinel, type: type} = pattern ->
+      message =
+        case type do
+          :equality ->
+            "`Map.get` with sentinel default `#{sentinel}` and comparison " <>
+              "`#{var_name} != #{sentinel}` is a Python idiom. " <>
+              "Use `Map.get/2` (returns `nil`) and compare with `!= nil`."
+
+          :ordering ->
+            "`Map.get` with sentinel default `#{sentinel}` used as a domain filter " <>
+              "in an ordering comparison on `#{var_name}`. " <>
+              "Use `Map.get/2` (returns `nil`) and guard with `#{var_name} != nil`."
+        end
+
       %Issue{
         rule: :no_map_get_sentinel,
-        message:
-          "`Map.get` with sentinel default `#{sentinel}` and comparison " <>
-            "`#{var_name} != #{sentinel}` is a Python idiom. " <>
-            "Use `Map.get/2` (returns `nil`) and compare with `!= nil`.",
+        message: message,
         meta: %{line: get_pattern_line(statements, pattern)}
       }
     end)
@@ -283,10 +352,9 @@ defmodule Credence.Pattern.NoMapGetSentinel do
 
   defp maybe_rewrite_block(node), do: node
 
-  # Applies a single sentinel fix: drops the Map.get default and
-  # replaces comparisons with nil in the safe range.
+  # Applies a single sentinel fix. Dispatches on comparison type.
   defp apply_single_fix(
-         %{var_name: var_name, sentinel: sentinel, index: idx, safe_end: safe_end},
+         %{var_name: var_name, sentinel: sentinel, index: idx, safe_end: safe_end, type: type},
          statements
        ) do
     statements
@@ -297,7 +365,10 @@ defmodule Credence.Pattern.NoMapGetSentinel do
           drop_map_get_default(stmt)
 
         i > idx and i <= safe_end ->
-          replace_sentinel_in_comparisons(stmt, var_name, sentinel)
+          case type do
+            :equality -> replace_sentinel_in_comparisons(stmt, var_name, sentinel)
+            :ordering -> wrap_ordering_with_nil_guard(stmt, var_name, sentinel)
+          end
 
         true ->
           stmt
@@ -335,6 +406,32 @@ defmodule Credence.Pattern.NoMapGetSentinel do
 
           true ->
             node
+        end
+
+      node ->
+        node
+    end)
+  end
+
+  # Walks an AST subtree wrapping ordering comparisons on var_name
+  # with a `var != nil and` guard. Only wraps comparisons where
+  # neither operand is the sentinel literal.
+  defp wrap_ordering_with_nil_guard(ast, var_name, sentinel) do
+    Macro.postwalk(ast, fn
+      {op, meta, [left, right]} = node when op in @ordering_ops ->
+        has_var = match_var?(left, var_name) or match_var?(right, var_name)
+
+        has_sentinel =
+          match_value?(left, sentinel) or match_value?(right, sentinel)
+
+        if has_var and not has_sentinel do
+          var_node =
+            if match_var?(left, var_name), do: left, else: right
+
+          nil_check = {:!=, meta, [var_node, nil]}
+          {:and, meta, [nil_check, node]}
+        else
+          node
         end
 
       node ->
