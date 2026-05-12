@@ -36,6 +36,11 @@ defmodule Credence.Pattern.NoIdentityFloatCoercion do
   Removes the identity operand and operator from the expression. When the
   entire line is a no-op self-assignment (`var = var * 1.0`), the line is
   deleted.
+
+  Pass `strict_identity: true` to flag only provable identities — i.e.
+  skip patterns where the non-identity operand is a bare variable whose
+  type isn't known to a per-file rule. On an integer, `* 1.0` is a
+  deliberate int → float coercion, not an identity.
   """
 
   use Credence.Pattern.Rule
@@ -48,22 +53,24 @@ defmodule Credence.Pattern.NoIdentityFloatCoercion do
   # Uses AST from Code.string_to_quoted (bare float literals).
 
   @impl true
-  def check(ast, _opts) do
+  def check(ast, opts) do
+    skip? = Keyword.get(opts, :strict_identity, false)
+
     {_ast, issues} =
       Macro.prewalk(ast, [], fn
         # expr OP identity  (right-hand identity)
-        {op, meta, [_expr, val]} = node, acc
+        {op, meta, [expr, val]} = node, acc
         when is_float(val) and op in [:*, :/, :+, :-] ->
-          if identity_right?(op, val) do
+          if identity_right?(op, val) and not (skip? and bare_var?(expr)) do
             {node, [build_issue(op, val, meta) | acc]}
           else
             {node, acc}
           end
 
         # identity OP expr  (left-hand identity, commutative ops only)
-        {op, meta, [val, _expr]} = node, acc
+        {op, meta, [val, expr]} = node, acc
         when is_float(val) and op in [:*, :+] ->
-          if identity_left?(op, val) do
+          if identity_left?(op, val) and not (skip? and bare_var?(expr)) do
             {node, [build_issue(op, val, meta) | acc]}
           else
             {node, acc}
@@ -80,10 +87,10 @@ defmodule Credence.Pattern.NoIdentityFloatCoercion do
   # Uses Sourceror for parsing (wraps literals in __block__).
 
   @impl true
-  def fix(source, _opts) do
+  def fix(source, opts) do
     case Sourceror.parse_string(source) do
       {:ok, ast} ->
-        target_lines = find_target_lines(ast)
+        target_lines = find_target_lines(ast, Keyword.get(opts, :strict_identity, false))
 
         if target_lines == [] do
           source
@@ -113,14 +120,16 @@ defmodule Credence.Pattern.NoIdentityFloatCoercion do
 
   # ── Target-line collection (Sourceror AST) ────────────────────────
 
-  defp find_target_lines(ast) do
+  defp find_target_lines(ast, skip?) do
     {_ast, lines} =
       Macro.prewalk(ast, [], fn
         # Single clause checks both sides — two clauses would shadow each
         # other because the first always matches any binary op node.
         {op, meta, [left, right]} = node, acc when op in [:*, :/, :+, :-] ->
-          hit_right = identity_right?(op, unwrap_float(right))
-          hit_left = op in [:*, :+] and identity_left?(op, unwrap_float(left))
+          hit_right = identity_right?(op, unwrap_float(right)) and not (skip? and bare_var?(left))
+          hit_left =
+            op in [:*, :+] and identity_left?(op, unwrap_float(left)) and
+              not (skip? and bare_var?(right))
 
           if hit_right or hit_left do
             {node, [Keyword.get(meta, :line) | acc]}
@@ -134,6 +143,10 @@ defmodule Credence.Pattern.NoIdentityFloatCoercion do
 
     Enum.uniq(lines)
   end
+
+  defp bare_var?({:__block__, _, [inner]}), do: bare_var?(inner)
+  defp bare_var?({name, _meta, ctx}) when is_atom(name) and is_atom(ctx), do: true
+  defp bare_var?(_), do: false
 
   # ── Line-level rewriting (regex) ──────────────────────────────────
 
