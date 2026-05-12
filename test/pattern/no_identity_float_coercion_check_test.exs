@@ -175,4 +175,11 @@ defmodule Credence.Pattern.NoIdentityFloatCoercionCheckTest do
       assert Credence.Pattern.NoIdentityFloatCoercion.fixable?() == true
     end
   end
+
+  describe ":strict_identity" do
+    test "skips bare variable operand when true" do
+      {:ok, ast} = Code.string_to_quoted("n * 1.0")
+      assert Credence.Pattern.NoIdentityFloatCoercion.check(ast, strict_identity: true) == []
+    end
+  end
 end
