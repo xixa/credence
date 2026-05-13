@@ -241,12 +241,31 @@ defmodule Credence.Pattern.NoRedundantListTraversalCheckTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════
-  # NEGATIVE — non-bare assignments
+  # POSITIVE — one bare assignment + one inline call
   # ═══════════════════════════════════════════════════════════════════
 
-  describe "does not flag when call is nested in a larger expression" do
-    test "length inside arithmetic" do
-      assert clean?("""
+  describe "flags when one call is bare and the other is inline" do
+    test "bare length + inline Enum.sum — exact idx=33 pattern" do
+      assert flagged?("""
+             def run(numbers) do
+               n = length(numbers)
+               div(n * (n + 1), 2) - Enum.sum(numbers)
+             end
+             """)
+    end
+
+    test "bare length + inline Enum.sum in assignment RHS" do
+      assert flagged?("""
+             def run(numbers) do
+               count = length(numbers)
+               doubled_sum = Enum.sum(numbers) * 2
+               {count, doubled_sum}
+             end
+             """)
+    end
+
+    test "bare Enum.sum + inline length in assignment RHS" do
+      assert flagged?("""
              def run(numbers) do
                half_count = div(length(numbers), 2)
                sum = Enum.sum(numbers)
@@ -255,12 +274,21 @@ defmodule Credence.Pattern.NoRedundantListTraversalCheckTest do
              """)
     end
 
-    test "Enum.sum inside arithmetic" do
-      assert clean?("""
+    test "bare Enum.min + inline Enum.max" do
+      assert flagged?("""
              def run(numbers) do
-               count = length(numbers)
-               doubled_sum = Enum.sum(numbers) * 2
-               {count, doubled_sum}
+               minimum = Enum.min(numbers)
+               minimum + Enum.max(numbers)
+             end
+             """)
+    end
+
+    test "bare Enum.max + inline Enum.min in assignment" do
+      assert flagged?("""
+             def run(numbers) do
+               maximum = Enum.max(numbers)
+               offset_min = Enum.min(numbers) + 10
+               maximum - offset_min
              end
              """)
     end

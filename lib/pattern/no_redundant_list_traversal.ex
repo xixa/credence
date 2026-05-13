@@ -93,7 +93,7 @@ defmodule Credence.Pattern.NoRedundantListTraversal do
   # ── Shared: scanning and grouping ─────────────────────────────────
 
   # Scans a block's direct children for bare traversal assignments.
-  # Returns a list of entry maps, each: %{result_var, list_var, type, label, index, line}
+  # Returns a list of entry maps, each: %{result_var, list_var, type, label, index, line, mode}
   defp scan_statements(statements) do
     statements
     |> Enum.with_index()
@@ -117,7 +117,8 @@ defmodule Credence.Pattern.NoRedundantListTraversal do
          type: type,
          label: label,
          index: index,
-         line: Keyword.get(meta, :line)
+         line: Keyword.get(meta, :line),
+         mode: :bare
        }}
     else
       _ -> :skip
@@ -126,10 +127,115 @@ defmodule Credence.Pattern.NoRedundantListTraversal do
 
   defp scan_statement(_, _), do: :skip
 
+  # Scans statements for inline traversal calls (calls embedded in
+  # larger expressions). Skips statements already captured as bare
+  # assignments AND discarded assignments (_ = ...) to avoid false positives.
+  defp scan_inline_calls(statements, bare_indices) do
+    statements
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {stmt, idx} ->
+      if idx in bare_indices or discarded_assignment?(stmt) do
+        []
+      else
+        find_inline_traversals(stmt, idx)
+      end
+    end)
+  end
+
+  defp discarded_assignment?({:=, _, [{:_, _, _}, _rhs]}), do: true
+  defp discarded_assignment?(_), do: false
+
+  # Finds tracked traversal calls in a statement WITHOUT descending
+  # into block bodies (do/else/catch/rescue/after clauses). This
+  # prevents cross-scope false positives from calls inside nested
+  # if/case/cond/fn/def bodies.
+  defp find_inline_traversals(stmt, stmt_index) do
+    calls = shallow_collect_calls(stmt)
+
+    Enum.map(calls, fn {list_var, type, label, line} ->
+      %{
+        result_var: generated_name(type),
+        list_var: list_var,
+        type: type,
+        label: label,
+        index: stmt_index,
+        line: line,
+        mode: :inline
+      }
+    end)
+  end
+
+  defp shallow_collect_calls(ast) do
+    shallow_collect_calls(ast, []) |> Enum.reverse()
+  end
+
+  defp shallow_collect_calls(ast, acc) do
+    # Check if THIS node is a tracked call
+    acc =
+      case identify_call(ast) do
+        {:ok, list_var, type, label} ->
+          line =
+            case ast do
+              {_, meta, _} when is_list(meta) -> Keyword.get(meta, :line)
+              _ -> nil
+            end
+
+          [{list_var, type, label, line} | acc]
+
+        :skip ->
+          acc
+      end
+
+    # Recurse into children, skipping keyword block bodies
+    case ast do
+      {_form, _meta, args} when is_list(args) ->
+        Enum.reduce(args, acc, &walk_child_shallow/2)
+
+      {left, right} ->
+        walk_child_shallow(left, walk_child_shallow(right, acc))
+
+      list when is_list(list) ->
+        if keyword_block_list?(list) do
+          acc
+        else
+          Enum.reduce(list, acc, &walk_child_shallow/2)
+        end
+
+      _ ->
+        acc
+    end
+  end
+
+  defp walk_child_shallow(child, acc), do: shallow_collect_calls(child, acc)
+
+  # Detects keyword lists that represent block bodies: [do: ...], [do: ..., else: ...], etc.
+  @block_keys [:do, :else, :catch, :rescue, :after]
+
+  defp keyword_block_list?([{key, _} | _]) when key in @block_keys, do: true
+
+  defp keyword_block_list?([{{:__block__, _, [key]}, _} | _]) when key in @block_keys,
+    do: true
+
+  defp keyword_block_list?(_), do: false
+
+  # Combines bare assignment scan with inline call scan.
+  defp scan_all_calls(statements) do
+    bare = scan_statements(statements)
+    bare_indices = MapSet.new(bare, & &1.index)
+    inline = scan_inline_calls(statements, bare_indices)
+    bare ++ inline
+  end
+
+  # Generated variable names for inline calls that need a fresh binding.
+  defp generated_name(:count), do: :count
+  defp generated_name(:sum), do: :sum
+  defp generated_name(:min), do: :minimum
+  defp generated_name(:max), do: :maximum
+
   # Groups entries by list variable and returns only valid groups:
   # 2+ distinct aggregate types, no rebinding between first and last.
   defp find_valid_groups(statements) do
-    scan_statements(statements)
+    scan_all_calls(statements)
     |> Enum.group_by(& &1.list_var)
     |> Enum.flat_map(fn {list_var, entries} ->
       distinct_types = entries |> Enum.map(& &1.type) |> Enum.uniq()
@@ -285,23 +391,91 @@ defmodule Credence.Pattern.NoRedundantListTraversal do
 
   defp maybe_rewrite_block(node), do: node
 
-  # Applies all fixes to a statement list: replaces the first call with
-  # the merged version and removes the second call.
+  # Applies all fixes to a statement list: handles bare-bare,
+  # bare-inline, inline-bare, and inline-inline entry pairs.
   defp apply_fixes(statements, groups) do
-    {replacements, removals} =
-      Enum.reduce(groups, {%{}, MapSet.new()}, fn group, {repls, rems} ->
-        [first, second] = group.entries
-        replacement = build_replacement(group.list_var, first, second)
-        {Map.put(repls, first.index, replacement), MapSet.put(rems, second.index)}
+    {replacements, removals, inline_rewrites, insertions} =
+      Enum.reduce(groups, {%{}, MapSet.new(), %{}, %{}}, fn group, acc ->
+        build_fix_plan(group, acc)
       end)
 
     statements
     |> Enum.with_index()
     |> Enum.flat_map(fn {stmt, idx} ->
       cond do
-        Map.has_key?(replacements, idx) -> [replacements[idx]]
-        idx in removals -> []
-        true -> [stmt]
+        # Insert merged call BEFORE this statement, then rewrite inline calls
+        Map.has_key?(insertions, idx) ->
+          rewritten = apply_inline_rewrites(stmt, Map.get(inline_rewrites, idx, []))
+          [insertions[idx], rewritten]
+
+        # Replace this bare assignment with the merged call
+        Map.has_key?(replacements, idx) ->
+          [replacements[idx]]
+
+        # Remove this bare assignment (merged into another position)
+        idx in removals ->
+          []
+
+        # Rewrite inline calls in this statement
+        Map.has_key?(inline_rewrites, idx) ->
+          [apply_inline_rewrites(stmt, inline_rewrites[idx])]
+
+        true ->
+          [stmt]
+      end
+    end)
+  end
+
+  # Builds the fix plan for a single group based on entry modes.
+  defp build_fix_plan(group, {repls, rems, rewrites, inserts}) do
+    [first, second] = group.entries
+    merged = build_replacement(group.list_var, first, second)
+
+    case {first.mode, second.mode} do
+      {:bare, :bare} ->
+        # Existing: replace first bare with merged, remove second bare
+        {Map.put(repls, first.index, merged), MapSet.put(rems, second.index), rewrites, inserts}
+
+      {:bare, :inline} ->
+        # Replace bare with merged, rewrite inline call in second's statement
+        new_rewrites = add_rewrite(rewrites, second)
+        {Map.put(repls, first.index, merged), rems, new_rewrites, inserts}
+
+      {:inline, :bare} ->
+        # Insert merged before first's statement, rewrite inline call, remove bare
+        new_inserts = Map.put(inserts, first.index, merged)
+        new_rewrites = add_rewrite(rewrites, first)
+        {repls, MapSet.put(rems, second.index), new_rewrites, new_inserts}
+
+      {:inline, :inline} ->
+        # Insert merged before first's statement, rewrite both inline calls
+        new_inserts = Map.put(inserts, first.index, merged)
+        new_rewrites = rewrites |> add_rewrite(first) |> add_rewrite(second)
+        {repls, rems, new_rewrites, new_inserts}
+    end
+  end
+
+  defp add_rewrite(rewrites, entry) do
+    spec = %{type: entry.type, list_var: entry.list_var, new_var: entry.result_var}
+    Map.update(rewrites, entry.index, [spec], &[spec | &1])
+  end
+
+  # Walks a statement AST replacing inline traversal calls with variable references.
+  defp apply_inline_rewrites(stmt, rewrites) do
+    Enum.reduce(rewrites, stmt, fn %{type: type, list_var: list_var, new_var: new_var}, ast ->
+      replace_call_with_var(ast, type, list_var, new_var)
+    end)
+  end
+
+  # Replaces the first matching traversal call in an AST with a plain variable.
+  defp replace_call_with_var(ast, target_type, target_list_var, new_var) do
+    Macro.postwalk(ast, fn node ->
+      case identify_call(node) do
+        {:ok, ^target_list_var, ^target_type, _label} ->
+          {new_var, [], nil}
+
+        _ ->
+          node
       end
     end)
   end

@@ -228,29 +228,105 @@ defmodule Credence.Pattern.NoRedundantListTraversalFixTest do
     end
   end
 
-  describe "does not modify non-bare assignments" do
-    test "length nested in arithmetic" do
+  # ═══════════════════════════════════════════════════════════════════
+  # One bare + one inline → merged with generated variable
+  # ═══════════════════════════════════════════════════════════════════
+
+  describe "fixes bare assignment + inline call" do
+    test "bare length + inline Enum.sum — exact idx=33 pattern" do
       input = """
       def run(numbers) do
-        half = div(length(numbers), 2)
-        sum = Enum.sum(numbers)
-        {half, sum}
+        n = length(numbers)
+        div(n * (n + 1), 2) - Enum.sum(numbers)
       end
       """
 
-      assert fix(input) == input
+      expected = """
+      def run(numbers) do
+        {n, sum} = Enum.reduce(numbers, {0, 0}, fn x, {c, s} -> {c + 1, s + x} end)
+        div(n * (n + 1), 2) - sum
+      end
+      """
+
+      assert fix(input) == expected
     end
 
-    test "sum nested in arithmetic" do
+    test "bare length + inline Enum.sum in assignment RHS" do
       input = """
       def run(numbers) do
         count = length(numbers)
-        doubled = Enum.sum(numbers) * 2
-        {count, doubled}
+        doubled_sum = Enum.sum(numbers) * 2
+        {count, doubled_sum}
       end
       """
 
-      assert fix(input) == input
+      expected = """
+      def run(numbers) do
+        {count, sum} = Enum.reduce(numbers, {0, 0}, fn x, {c, s} -> {c + 1, s + x} end)
+        doubled_sum = sum * 2
+        {count, doubled_sum}
+      end
+      """
+
+      assert fix(input) == expected
+    end
+
+    test "bare Enum.sum + inline length in assignment RHS" do
+      input = """
+      def run(numbers) do
+        half_count = div(length(numbers), 2)
+        sum = Enum.sum(numbers)
+        {half_count, sum}
+      end
+      """
+
+      expected = """
+      def run(numbers) do
+        {count, sum} = Enum.reduce(numbers, {0, 0}, fn x, {c, s} -> {c + 1, s + x} end)
+        half_count = div(count, 2)
+        {half_count, sum}
+      end
+      """
+
+      assert fix(input) == expected
+    end
+
+    test "bare Enum.min + inline Enum.max" do
+      input = """
+      def run(numbers) do
+        minimum = Enum.min(numbers)
+        minimum + Enum.max(numbers)
+      end
+      """
+
+      expected = """
+      def run(numbers) do
+        {minimum, maximum} = Enum.min_max(numbers)
+        minimum + maximum
+      end
+      """
+
+      assert fix(input) == expected
+    end
+
+    test "bare Enum.max + inline Enum.min in assignment" do
+      input = """
+      def run(numbers) do
+        maximum = Enum.max(numbers)
+        offset_min = Enum.min(numbers) + 10
+        maximum - offset_min
+      end
+      """
+
+      expected = """
+      def run(numbers) do
+        {minimum, maximum} = Enum.min_max(numbers)
+        offset_min = minimum + 10
+        maximum - offset_min
+      end
+      """
+
+      assert fix(input) == expected
     end
   end
 

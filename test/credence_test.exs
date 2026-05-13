@@ -224,8 +224,8 @@ defmodule CredenceTest do
       assert_clean("""
       defmodule MissingNumber do
         def missing_number(nums) do
-          n = length(nums)
-          div(n * (n + 1), 2) - Enum.sum(nums)
+          {n, sum} = Enum.reduce(nums, {0, 0}, fn x, {c, s} -> {c + 1, s + x} end)
+          div(n * (n + 1), 2) - sum
         end
       end
       """)
